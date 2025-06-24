@@ -1,13 +1,37 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Timer, Code, Users, Trophy, ChevronRight } from "lucide-react";
+import { Timer, Code, Users, Trophy, ChevronRight, LogOut } from "lucide-react";
+import { useAuth } from '@/contexts/AuthContext';
 import ExamInterface from "./ExamInterface";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<'landing' | 'exam'>('landing');
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  // Redirect authenticated users who try to access exam without being in exam view
+  useEffect(() => {
+    if (user && currentView === 'exam') {
+      // User is authenticated and in exam - this is fine
+    }
+  }, [user, currentView]);
+
+  const handleSignOut = async () => {
+    await signOut();
+    setCurrentView('landing');
+  };
+
+  const handleJoinContest = () => {
+    if (!user) {
+      navigate('/auth');
+    } else {
+      setCurrentView('exam');
+    }
+  };
 
   const contests = [
     {
@@ -55,9 +79,26 @@ const Index = () => {
               <Button variant="ghost" className="text-slate-300 hover:text-white">
                 Leaderboard
               </Button>
-              <Button className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600">
-                Sign In
-              </Button>
+              {user ? (
+                <div className="flex items-center space-x-3">
+                  <span className="text-slate-300">Welcome back!</span>
+                  <Button
+                    onClick={handleSignOut}
+                    variant="outline"
+                    className="border-slate-600 text-slate-300 hover:text-white"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  onClick={() => navigate('/auth')}
+                  className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600"
+                >
+                  Sign In
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -128,11 +169,11 @@ const Index = () => {
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-400">{contest.problems} Problems</span>
                     <Button 
-                      onClick={() => setCurrentView('exam')}
+                      onClick={handleJoinContest}
                       className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600"
                       disabled={contest.status !== 'Active'}
                     >
-                      {contest.status === 'Active' ? 'Join Contest' : 'Starting Soon'}
+                      {contest.status === 'Active' ? (user ? 'Join Contest' : 'Sign In to Join') : 'Starting Soon'}
                       <ChevronRight className="h-4 w-4 ml-1" />
                     </Button>
                   </div>
