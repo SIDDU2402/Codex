@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Play, Send, Clock } from "lucide-react";
 import { useSubmitCode } from "@/hooks/useContests";
+import { supabase } from "@/integrations/supabase/client";
 
 interface CodeEditorProps {
   problemId?: string;
