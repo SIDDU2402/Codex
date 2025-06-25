@@ -1,45 +1,36 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { 
   ChevronLeft, 
   ChevronRight, 
-  Menu, 
-  Settings, 
-  HelpCircle,
+  Users,
   Flag,
-  Users
+  HelpCircle
 } from "lucide-react";
 import Timer from "@/components/Timer";
 import ProblemPanel from "@/components/ProblemPanel";
 import CodeEditor from "@/components/CodeEditor";
+import { useContestProblems, useContestLeaderboard } from "@/hooks/useContests";
+import { useRealtimeLeaderboard } from "@/hooks/useRealtime";
 
 interface ExamInterfaceProps {
+  contestId: string;
   onBack: () => void;
 }
 
-const ExamInterface = ({ onBack }: ExamInterfaceProps) => {
+const ExamInterface = ({ contestId, onBack }: ExamInterfaceProps) => {
   const [currentProblem, setCurrentProblem] = useState(1);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [submittedProblems, setSubmittedProblems] = useState<number[]>([]);
   
-  const problems = [
-    { id: 1, title: "Two Sum", difficulty: "Easy", points: 100 },
-    { id: 2, title: "Add Two Numbers", difficulty: "Medium", points: 200 },
-    { id: 3, title: "Longest Substring", difficulty: "Medium", points: 200 },
-    { id: 4, title: "Median of Arrays", difficulty: "Hard", points: 300 },
-    { id: 5, title: "Regular Expression", difficulty: "Hard", points: 300 }
-  ];
-
-  const leaderboard = [
-    { rank: 1, name: "Alice Chen", score: 800, time: "1:23:45", problems: 4 },
-    { rank: 2, name: "Bob Smith", score: 600, time: "1:45:30", problems: 3 },
-    { rank: 3, name: "Carol Davis", score: 500, time: "1:12:20", problems: 3 },
-    { rank: 4, name: "David Wilson", score: 400, time: "2:01:15", problems: 2 },
-    { rank: 5, name: "Eva Brown", score: 300, time: "1:55:40", problems: 2 }
-  ];
+  const { data: problems, isLoading: problemsLoading } = useContestProblems(contestId);
+  const { data: leaderboard } = useContestLeaderboard(contestId);
+  
+  // Set up real-time leaderboard updates
+  useRealtimeLeaderboard(contestId);
 
   const handleTimeUp = () => {
     alert("Time's up! Your solutions will be automatically submitted.");
@@ -51,6 +42,24 @@ const ExamInterface = ({ onBack }: ExamInterfaceProps) => {
       setSubmittedProblems([...submittedProblems, currentProblem]);
     }
   };
+
+  if (problemsLoading) {
+    return (
+      <div className="h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-white text-lg">Loading contest...</div>
+      </div>
+    );
+  }
+
+  if (!problems || problems.length === 0) {
+    return (
+      <div className="h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-white text-lg">No problems found for this contest</div>
+      </div>
+    );
+  }
+
+  const currentProblemData = problems[currentProblem - 1];
 
   return (
     <div className="h-screen bg-slate-900 flex flex-col">
@@ -66,7 +75,7 @@ const ExamInterface = ({ onBack }: ExamInterfaceProps) => {
             Back to Contests
           </Button>
           <div className="h-6 w-px bg-slate-600" />
-          <h1 className="text-lg font-semibold text-white">Spring Coding Challenge 2024</h1>
+          <h1 className="text-lg font-semibold text-white">Contest #{contestId.slice(0, 8)}</h1>
         </div>
         
         <div className="flex items-center space-x-4">
@@ -90,22 +99,22 @@ const ExamInterface = ({ onBack }: ExamInterfaceProps) => {
         <div className="w-64 border-r border-slate-700 bg-slate-800 p-4">
           <h3 className="text-sm font-semibold text-white mb-4">Problems</h3>
           <div className="space-y-2">
-            {problems.map((problem) => (
+            {problems.map((problem, index) => (
               <Card 
                 key={problem.id}
                 className={`cursor-pointer transition-all hover:bg-slate-700/50 ${
-                  currentProblem === problem.id 
+                  currentProblem === index + 1
                     ? 'bg-slate-700 border-cyan-500' 
                     : 'bg-slate-800/50 border-slate-700'
                 }`}
-                onClick={() => setCurrentProblem(problem.id)}
+                onClick={() => setCurrentProblem(index + 1)}
               >
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-white">
-                      {problem.id}. {problem.title}
+                      {index + 1}. {problem.title}
                     </span>
-                    {submittedProblems.includes(problem.id) && (
+                    {submittedProblems.includes(index + 1) && (
                       <Badge className="bg-green-600 text-white text-xs">
                         ✓
                       </Badge>
@@ -147,12 +156,16 @@ const ExamInterface = ({ onBack }: ExamInterfaceProps) => {
         <div className="flex-1 flex">
           {/* Problem Panel */}
           <div className="w-1/2 border-r border-slate-700">
-            <ProblemPanel />
+            <ProblemPanel problem={currentProblemData} />
           </div>
 
           {/* Code Editor Panel */}
           <div className="w-1/2">
-            <CodeEditor />
+            <CodeEditor 
+              problemId={currentProblemData?.id}
+              contestId={contestId}
+              onSubmit={handleSubmit}
+            />
           </div>
         </div>
 
@@ -173,33 +186,50 @@ const ExamInterface = ({ onBack }: ExamInterfaceProps) => {
               </div>
               <CardContent className="p-0">
                 <div className="max-h-80 overflow-y-auto">
-                  {leaderboard.map((entry) => (
-                    <div 
-                      key={entry.rank}
-                      className="flex items-center justify-between p-4 border-b border-slate-700 last:border-b-0"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <Badge 
-                          className={`text-xs ${
-                            entry.rank === 1 ? 'bg-yellow-500' :
-                            entry.rank === 2 ? 'bg-gray-400' :
-                            entry.rank === 3 ? 'bg-orange-600' :
-                            'bg-slate-600'
-                          }`}
-                        >
-                          #{entry.rank}
-                        </Badge>
-                        <div>
-                          <div className="text-sm font-medium text-white">{entry.name}</div>
-                          <div className="text-xs text-slate-400">{entry.problems} problems</div>
+                  {leaderboard && leaderboard.length > 0 ? (
+                    leaderboard.map((entry) => (
+                      <div 
+                        key={entry.user_id}
+                        className="flex items-center justify-between p-4 border-b border-slate-700 last:border-b-0"
+                      >
+                        <div className="flex items-center space-x-3">
+                          <Badge 
+                            className={`text-xs ${
+                              entry.rank === 1 ? 'bg-yellow-500' :
+                              entry.rank === 2 ? 'bg-gray-400' :
+                              entry.rank === 3 ? 'bg-orange-600' :
+                              'bg-slate-600'
+                            }`}
+                          >
+                            #{entry.rank}
+                          </Badge>
+                          <div>
+                            <div className="text-sm font-medium text-white">
+                              {entry.full_name || entry.username || 'Anonymous'}
+                            </div>
+                            <div className="text-xs text-slate-400">
+                              {entry.problems_solved} problems
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-semibold text-cyan-400">
+                            {entry.total_score}
+                          </div>
+                          <div className="text-xs text-slate-400">
+                            {entry.last_submission_time ? 
+                              new Date(entry.last_submission_time).toLocaleTimeString() : 
+                              'No submissions'
+                            }
+                          </div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-sm font-semibold text-cyan-400">{entry.score}</div>
-                        <div className="text-xs text-slate-400">{entry.time}</div>
-                      </div>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-slate-400">
+                      No participants yet
                     </div>
-                  ))}
+                  )}
                 </div>
               </CardContent>
             </Card>

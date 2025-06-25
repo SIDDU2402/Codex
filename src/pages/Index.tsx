@@ -2,62 +2,32 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Timer, Code, Users, Trophy, ChevronRight, LogOut } from "lucide-react";
+import { Code, Users, Trophy, ChevronRight, LogOut, Timer } from "lucide-react";
 import { useAuth } from '@/contexts/AuthContext';
+import { useContests } from '@/hooks/useContests';
+import ContestCard from '@/components/ContestCard';
 import ExamInterface from "./ExamInterface";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<'landing' | 'exam'>('landing');
+  const [selectedContestId, setSelectedContestId] = useState<string>('');
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-
-  // Redirect authenticated users who try to access exam without being in exam view
-  useEffect(() => {
-    if (user && currentView === 'exam') {
-      // User is authenticated and in exam - this is fine
-    }
-  }, [user, currentView]);
+  const { data: contests, isLoading, error } = useContests();
 
   const handleSignOut = async () => {
     await signOut();
     setCurrentView('landing');
   };
 
-  const handleJoinContest = () => {
-    if (!user) {
-      navigate('/auth');
-    } else {
-      setCurrentView('exam');
-    }
+  const handleJoinContest = (contestId: string) => {
+    setSelectedContestId(contestId);
+    setCurrentView('exam');
   };
 
-  const contests = [
-    {
-      id: 1,
-      title: "Spring Coding Challenge 2024",
-      description: "Test your algorithmic skills in this comprehensive coding challenge",
-      duration: "3 hours",
-      participants: 245,
-      difficulty: "Medium",
-      status: "Active",
-      problems: 5
-    },
-    {
-      id: 2,
-      title: "Technical Interview Prep",
-      description: "Practice common interview questions from top tech companies",
-      duration: "2 hours",
-      participants: 89,
-      difficulty: "Hard",
-      status: "Starting Soon",
-      problems: 3
-    }
-  ];
-
-  if (currentView === 'exam') {
-    return <ExamInterface onBack={() => setCurrentView('landing')} />;
+  if (currentView === 'exam' && selectedContestId) {
+    return <ExamInterface contestId={selectedContestId} onBack={() => setCurrentView('landing')} />;
   }
 
   return (
@@ -133,54 +103,24 @@ const Index = () => {
         {/* Active Contests */}
         <div className="mb-12">
           <h2 className="text-3xl font-bold text-white mb-8 text-center">Active Contests</h2>
-          <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-            {contests.map((contest) => (
-              <Card key={contest.id} className="bg-slate-800/50 border-slate-700 hover:bg-slate-800/70 transition-all duration-300 hover:scale-105">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-white text-lg mb-2">{contest.title}</CardTitle>
-                      <p className="text-slate-300 text-sm">{contest.description}</p>
-                    </div>
-                    <Badge 
-                      variant={contest.status === 'Active' ? 'default' : 'secondary'}
-                      className={contest.status === 'Active' ? 'bg-green-500 hover:bg-green-600' : ''}
-                    >
-                      {contest.status}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-4 text-sm text-slate-400">
-                      <div className="flex items-center space-x-1">
-                        <Timer className="h-4 w-4" />
-                        <span>{contest.duration}</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <Users className="h-4 w-4" />
-                        <span>{contest.participants}</span>
-                      </div>
-                      <Badge variant="outline" className="text-xs border-slate-600 text-slate-400">
-                        {contest.difficulty}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-400">{contest.problems} Problems</span>
-                    <Button 
-                      onClick={handleJoinContest}
-                      className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600"
-                      disabled={contest.status !== 'Active'}
-                    >
-                      {contest.status === 'Active' ? (user ? 'Join Contest' : 'Sign In to Join') : 'Starting Soon'}
-                      <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          {isLoading ? (
+            <div className="text-center text-slate-400">Loading contests...</div>
+          ) : error ? (
+            <div className="text-center text-red-400">Failed to load contests</div>
+          ) : contests && contests.length > 0 ? (
+            <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+              {contests.map((contest) => (
+                <ContestCard
+                  key={contest.id}
+                  contest={contest}
+                  participantCount={0} // TODO: Add participant count query
+                  onJoin={handleJoinContest}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center text-slate-400">No active contests available</div>
+          )}
         </div>
 
         {/* Features Section */}

@@ -9,6 +9,130 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      contest_participants: {
+        Row: {
+          contest_id: string
+          id: string
+          joined_at: string
+          user_id: string
+        }
+        Insert: {
+          contest_id: string
+          id?: string
+          joined_at?: string
+          user_id: string
+        }
+        Update: {
+          contest_id?: string
+          id?: string
+          joined_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contest_participants_contest_id_fkey"
+            columns: ["contest_id"]
+            isOneToOne: false
+            referencedRelation: "contests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contests: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          duration_minutes: number
+          end_time: string
+          id: string
+          max_participants: number | null
+          start_time: string
+          status: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description?: string | null
+          duration_minutes: number
+          end_time: string
+          id?: string
+          max_participants?: number | null
+          start_time: string
+          status?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          duration_minutes?: number
+          end_time?: string
+          id?: string
+          max_participants?: number | null
+          start_time?: string
+          status?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      problems: {
+        Row: {
+          contest_id: string | null
+          created_at: string
+          description: string
+          difficulty: string | null
+          id: string
+          memory_limit_mb: number | null
+          points: number
+          problem_order: number
+          sample_input: string | null
+          sample_output: string | null
+          time_limit_seconds: number | null
+          title: string
+        }
+        Insert: {
+          contest_id?: string | null
+          created_at?: string
+          description: string
+          difficulty?: string | null
+          id?: string
+          memory_limit_mb?: number | null
+          points?: number
+          problem_order: number
+          sample_input?: string | null
+          sample_output?: string | null
+          time_limit_seconds?: number | null
+          title: string
+        }
+        Update: {
+          contest_id?: string | null
+          created_at?: string
+          description?: string
+          difficulty?: string | null
+          id?: string
+          memory_limit_mb?: number | null
+          points?: number
+          problem_order?: number
+          sample_input?: string | null
+          sample_output?: string | null
+          time_limit_seconds?: number | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "problems_contest_id_fkey"
+            columns: ["contest_id"]
+            isOneToOne: false
+            referencedRelation: "contests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -39,9 +163,134 @@ export type Database = {
         }
         Relationships: []
       }
+      submissions: {
+        Row: {
+          code: string
+          contest_id: string
+          error_message: string | null
+          execution_time_ms: number | null
+          id: string
+          language: string
+          memory_used_mb: number | null
+          problem_id: string
+          score: number | null
+          status: string | null
+          submitted_at: string
+          test_cases_passed: number | null
+          total_test_cases: number | null
+          user_id: string
+        }
+        Insert: {
+          code: string
+          contest_id: string
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          language: string
+          memory_used_mb?: number | null
+          problem_id: string
+          score?: number | null
+          status?: string | null
+          submitted_at?: string
+          test_cases_passed?: number | null
+          total_test_cases?: number | null
+          user_id: string
+        }
+        Update: {
+          code?: string
+          contest_id?: string
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          language?: string
+          memory_used_mb?: number | null
+          problem_id?: string
+          score?: number | null
+          status?: string | null
+          submitted_at?: string
+          test_cases_passed?: number | null
+          total_test_cases?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submissions_contest_id_fkey"
+            columns: ["contest_id"]
+            isOneToOne: false
+            referencedRelation: "contests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submissions_problem_id_fkey"
+            columns: ["problem_id"]
+            isOneToOne: false
+            referencedRelation: "problems"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      test_cases: {
+        Row: {
+          created_at: string
+          expected_output: string
+          id: string
+          input_data: string
+          is_sample: boolean | null
+          points: number | null
+          problem_id: string
+        }
+        Insert: {
+          created_at?: string
+          expected_output: string
+          id?: string
+          input_data: string
+          is_sample?: boolean | null
+          points?: number | null
+          problem_id: string
+        }
+        Update: {
+          created_at?: string
+          expected_output?: string
+          id?: string
+          input_data?: string
+          is_sample?: boolean | null
+          points?: number | null
+          problem_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_cases_problem_id_fkey"
+            columns: ["problem_id"]
+            isOneToOne: false
+            referencedRelation: "problems"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
-      [_ in never]: never
+      contest_leaderboard: {
+        Row: {
+          contest_id: string | null
+          full_name: string | null
+          joined_at: string | null
+          last_submission_time: string | null
+          problems_solved: number | null
+          rank: number | null
+          total_score: number | null
+          user_id: string | null
+          username: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contest_participants_contest_id_fkey"
+            columns: ["contest_id"]
+            isOneToOne: false
+            referencedRelation: "contests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       [_ in never]: never
