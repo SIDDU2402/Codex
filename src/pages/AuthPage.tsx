@@ -39,19 +39,10 @@ const AuthPage = () => {
             title: "Welcome back!",
             description: "You have successfully signed in.",
           });
-          const { data, error: profileError } = await window.supabase
-          .from('profiles')
-          .select('role')
-          .eq('email', email)
-          .single();
-        if (profileError) {
-          navigate('/');
-        } else if (data?.role === 'admin') {
-          navigate('/admin');
-        } else {
+         
           navigate('/');
         }
-        }
+        
       } else {
         const { error } = await signUp(email, password, fullName, username);
         if (error) {
