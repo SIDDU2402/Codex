@@ -1,7 +1,6 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, Memory, Trophy } from "lucide-react";
+import { Clock, HardDrive, Trophy } from "lucide-react";
 
 interface Problem {
   id: string;
@@ -62,7 +61,7 @@ const ProblemPanel = ({ problem }: ProblemPanelProps) => {
           )}
           {problem.memory_limit_mb && (
             <div className="flex items-center space-x-1">
-              <Memory className="h-4 w-4" />
+              <HardDrive className="h-4 w-4" />
               <span>{problem.memory_limit_mb}MB</span>
             </div>
           )}
