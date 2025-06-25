@@ -1,8 +1,33 @@
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+
+// Hook to check if current user is admin
+export const useIsAdmin = () => {
+  const { user } = useAuth();
+  
+  return useQuery({
+    queryKey: ['user-profile', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return { role: null };
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching user profile:', error);
+        return { role: null };
+      }
+      
+      return data;
+    },
+    enabled: !!user?.id,
+  });
+};
 
 export const useCreateContest = () => {
   const queryClient = useQueryClient();
