@@ -49,12 +49,27 @@ const CodeEditor = ({ problemId, contestId, onSubmit }: CodeEditorProps) => {
     }
 
     try {
-      await submitCode.mutateAsync({
+      const submission = await submitCode.mutateAsync({
         problemId,
         contestId,
         code,
         language,
       });
+      
+      // Trigger automatic evaluation
+      if (submission?.id) {
+        // Call the evaluation edge function
+        const { data, error } = await supabase.functions.invoke('evaluate-submission', {
+          body: { submissionId: submission.id }
+        });
+        
+        if (error) {
+          console.error('Evaluation failed:', error);
+        } else {
+          console.log('Evaluation completed:', data);
+        }
+      }
+      
       onSubmit?.();
     } catch (error) {
       console.error("Submission failed:", error);
