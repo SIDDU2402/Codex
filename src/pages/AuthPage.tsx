@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Code, AlertCircle } from "lucide-react";
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 const AuthPage = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -41,7 +42,6 @@ const AuthPage = () => {
           });
           // Fetch user role after login
           try {
-            const { supabase } = await import('@/integrations/supabase/client');
             const { data: { session } } = await supabase.auth.getSession();
             const userId = session?.user?.id;
             if (!userId) {
@@ -61,25 +61,25 @@ const AuthPage = () => {
               navigate('/');
             }
           } catch (e) {
-          const { data, error: profileError } = await window.supabase
-            .from('profiles')
-            .select('role')
-            .eq('email', email)
-            .single();
-          if (profileError) {
-            console.error('Supabase profile fetch error:', profileError);
-            toast({
-              title: "Profile Error",
-              description: profileError.message || "Could not fetch user profile.",
-              variant: "destructive",
-            });
-            navigate('/');
-          } else if (data?.role === 'admin') {
-            navigate('/admin');
-          } else {
-            navigate('/');
+            const { data, error: profileError } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('email', email)
+              .single();
+            if (profileError) {
+              console.error('Supabase profile fetch error:', profileError);
+              toast({
+                title: "Profile Error",
+                description: profileError.message || "Could not fetch user profile.",
+                variant: "destructive",
+              });
+              navigate('/');
+            } else if (data?.role === 'admin') {
+              navigate('/admin');
+            } else {
+              navigate('/');
+            }
           }
-        }
         }
       } else {
         const { error } = await signUp(email, password, fullName, username);

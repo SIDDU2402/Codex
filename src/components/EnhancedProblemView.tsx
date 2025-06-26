@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -7,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTestCases } from '@/hooks/useAdmin';
 import MonacoCodeEditor from './MonacoCodeEditor';
 import TestCaseRunner from './TestCaseRunner';
-import { Clock, Memory, Award } from 'lucide-react';
+import { Clock, HardDrive, Award } from 'lucide-react';
 
 interface Problem {
   id: string;
@@ -66,7 +65,7 @@ const EnhancedProblemView = ({ problem, contestId, onSubmit }: EnhancedProblemVi
               {problem.time_limit_seconds}s
             </div>
             <div className="flex items-center">
-              <Memory className="h-4 w-4 mr-1" />
+              <HardDrive className="h-4 w-4 mr-1" />
               {problem.memory_limit_mb}MB
             </div>
           </div>
