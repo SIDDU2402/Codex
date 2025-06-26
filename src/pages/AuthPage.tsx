@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,10 @@ import { Code, AlertCircle } from "lucide-react";
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+
+interface UserProfile {
+  role: string | null;
+}
 
 const AuthPage = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -21,65 +26,69 @@ const AuthPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const fetchUserProfile = async (userId: string, fallbackEmail?: string) => {
+  const fetchUserProfile = async (userId: string, fallbackEmail?: string): Promise<UserProfile | null> => {
     try {
+      // First attempt with user ID
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', userId)
         .single();
         
-      if (profileError && fallbackEmail) {
-        // Try fallback with email
+      if (!profileError && profile) {
+        return profile as UserProfile;
+      }
+      
+      // Fallback attempt with email if provided
+      if (fallbackEmail) {
         const { data: emailProfile, error: emailError } = await supabase
           .from('profiles')
           .select('role')
           .eq('email', fallbackEmail)
           .single();
           
-        if (emailError) {
-          console.error('Profile fetch error:', emailError);
-          return null;
+        if (!emailError && emailProfile) {
+          return emailProfile as UserProfile;
         }
-        return emailProfile;
       }
       
-      if (profileError) {
-        console.error('Profile fetch error:', profileError);
-        return null;
-      }
-      
-      return profile;
+      console.error('Profile fetch error:', profileError);
+      return null;
     } catch (error) {
       console.error('Error fetching profile:', error);
       return null;
     }
   };
 
-  const handleSuccessfulLogin = async () => {
+  const handleSuccessfulLogin = async (): Promise<void> => {
     toast({
       title: "Welcome back!",
       description: "You have successfully signed in.",
     });
     
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id;
-    
-    if (!userId) {
-      navigate('/');
-      return;
-    }
-    
-    const profile = await fetchUserProfile(userId, email);
-    
-    if (profile?.role === 'admin') {
-      navigate('/admin');
-    } else {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      
+      if (!userId) {
+        navigate('/');
+        return;
+      }
+      
+      const profile = await fetchUserProfile(userId, email);
+      
+      if (profile?.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/');
+      }
+    } catch (error) {
+      console.error('Error in handleSuccessfulLogin:', error);
       navigate('/');
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     setLoading(true);
 
