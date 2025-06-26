@@ -8,10 +8,11 @@ import { useAdminContests, useContestLeaderboard } from '@/hooks/useContests';
 import { useUpdateContestStatus } from '@/hooks/useAdmin';
 import { Play, Pause, Square, Users, Trophy, Clock } from 'lucide-react';
 import CreateContestForm from './CreateContestForm';
-import ProblemManager from './ProblemManager';
+import ContestProblemManager from './ContestProblemManager';
 
 const ContestDashboard = () => {
   const [selectedContest, setSelectedContest] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('overview');
   const { data: contests, isLoading, refetch } = useAdminContests();
   const updateContestStatus = useUpdateContestStatus();
 
@@ -21,6 +22,11 @@ const ContestDashboard = () => {
         refetch();
       }
     });
+  };
+
+  const handleContestSelect = (contestId: string) => {
+    setSelectedContest(contestId);
+    setActiveTab('manage');
   };
 
   if (isLoading) {
@@ -36,6 +42,7 @@ const ContestDashboard = () => {
   const activeContests = contests?.filter(c => c.status === 'active') || [];
   const draftContests = contests?.filter(c => c.status === 'draft') || [];
   const endedContests = contests?.filter(c => c.status === 'ended') || [];
+  const selectedContestData = contests?.find(c => c.id === selectedContest);
 
   return (
     <div className="min-h-screen bg-slate-900 p-6">
@@ -45,11 +52,18 @@ const ContestDashboard = () => {
           <p className="text-slate-400">Create and manage coding contests</p>
         </div>
 
-        <Tabs defaultValue="overview" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="bg-slate-800 border-slate-700">
             <TabsTrigger value="overview" className="data-[state=active]:bg-slate-700">Overview</TabsTrigger>
             <TabsTrigger value="create" className="data-[state=active]:bg-slate-700">Create Contest</TabsTrigger>
-            <TabsTrigger value="manage" className="data-[state=active]:bg-slate-700">Manage Problems</TabsTrigger>
+            <TabsTrigger value="manage" className="data-[state=active]:bg-slate-700">
+              Manage Problems
+              {selectedContestData && (
+                <span className="ml-2 text-xs bg-blue-600 px-2 py-1 rounded">
+                  {selectedContestData.title}
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -99,7 +113,7 @@ const ContestDashboard = () => {
                     key={contest.id}
                     contest={contest}
                     onStatusUpdate={handleStatusUpdate}
-                    onSelect={() => setSelectedContest(contest.id)}
+                    onSelect={() => handleContestSelect(contest.id)}
                     isSelected={selectedContest === contest.id}
                   />
                 ))
@@ -119,11 +133,21 @@ const ContestDashboard = () => {
 
           <TabsContent value="manage">
             {selectedContest ? (
-              <ProblemManager contestId={selectedContest} />
+              <ContestProblemManager 
+                contestId={selectedContest} 
+                contestTitle={selectedContestData?.title}
+                onBack={() => setActiveTab('overview')}
+              />
             ) : (
               <Card className="bg-slate-800 border-slate-700">
                 <CardContent className="p-6 text-center">
-                  <p className="text-slate-400">Select a contest from the Overview tab to manage its problems</p>
+                  <p className="text-slate-400 mb-4">Select a contest from the Overview tab to manage its problems</p>
+                  <Button 
+                    onClick={() => setActiveTab('overview')}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    Go to Overview
+                  </Button>
                 </CardContent>
               </Card>
             )}

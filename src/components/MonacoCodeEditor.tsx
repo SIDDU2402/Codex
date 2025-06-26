@@ -9,6 +9,7 @@ import { Play, Send, Clock, CheckCircle, XCircle, Loader } from 'lucide-react';
 import { useSubmitCode } from '@/hooks/useContests';
 import { useEvaluateSubmission } from '@/hooks/useEvaluation';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 interface MonacoCodeEditorProps {
   problemId?: string;
@@ -25,7 +26,7 @@ interface MonacoCodeEditorProps {
 
 const MonacoCodeEditor = ({ problemId, contestId, onSubmit, testCases }: MonacoCodeEditorProps) => {
   const editorRef = useRef<any>(null);
-  const [code, setCode] = useState(getDefaultCode('javascript'));
+  const [code, setCode] = useState('');
   const [language, setLanguage] = useState('javascript');
   const [isRunning, setIsRunning] = useState(false);
   const [testResults, setTestResults] = useState<Array<{
@@ -35,7 +36,6 @@ const MonacoCodeEditor = ({ problemId, contestId, onSubmit, testCases }: MonacoC
     actual: string;
     error?: string;
   }>>([]);
-  const [lastSubmissionId, setLastSubmissionId] = useState<string | null>(null);
 
   const submitCode = useSubmitCode();
   const evaluateSubmission = useEvaluateSubmission();
@@ -52,15 +52,31 @@ const MonacoCodeEditor = ({ problemId, contestId, onSubmit, testCases }: MonacoC
     const templates = {
       javascript: `function solution() {
     // Write your solution here
-    return "";
-}`,
+    // Use readline() to read input
+    const input = readline().trim();
+    
+    // Process the input and return the result
+    return input;
+}
+
+// Example: For problems that need to read multiple lines
+// const line1 = readline();
+// const line2 = readline();`,
       python: `def solution():
     # Write your solution here
-    return ""`,
+    # Use input() to read input
+    line = input().strip()
+    
+    # Process the input and return the result
+    return line`,
       java: `public class Solution {
-    public String solution() {
+    public static String solution() {
         // Write your solution here
-        return "";
+        Scanner scanner = new Scanner(System.in);
+        String input = scanner.nextLine();
+        
+        // Process the input and return the result
+        return input;
     }
 }`,
       cpp: `#include <iostream>
@@ -69,28 +85,38 @@ using namespace std;
 
 string solution() {
     // Write your solution here
-    return "";
+    string input;
+    getline(cin, input);
+    
+    // Process the input and return the result
+    return input;
 }`,
       c: `#include <stdio.h>
 #include <string.h>
 
 char* solution() {
     // Write your solution here
-    return "";
+    static char input[1000];
+    fgets(input, sizeof(input), stdin);
+    
+    // Process the input and return the result
+    return input;
 }`
     };
     return templates[lang as keyof typeof templates] || templates.javascript;
   }
 
+  useEffect(() => {
+    setCode(getDefaultCode(language));
+  }, [language]);
+
   const handleLanguageChange = (newLanguage: string) => {
     setLanguage(newLanguage);
-    setCode(getDefaultCode(newLanguage));
   };
 
   const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
     
-    // Configure Monaco themes
     monaco.editor.defineTheme('darkTheme', {
       base: 'vs-dark',
       inherit: true,
@@ -102,36 +128,23 @@ char* solution() {
     });
     monaco.editor.setTheme('darkTheme');
 
-    // Add keyboard shortcuts
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       handleRun();
     });
   };
 
-  const executeCode = async (codeToRun: string, lang: string, input: string): Promise<{ output: string; error?: string }> => {
-    try {
-      switch (lang) {
-        case 'javascript':
-          return await executeJavaScript(codeToRun, input);
-        case 'python':
-          return await executePython(codeToRun, input);
-        default:
-          return { output: '', error: `Language ${lang} not yet supported in preview` };
-      }
-    } catch (error) {
-      return { output: '', error: error instanceof Error ? error.message : 'Execution error' };
-    }
-  };
-
   const executeJavaScript = async (code: string, input: string): Promise<{ output: string; error?: string }> => {
     try {
       const wrappedCode = `
-        const input = ${JSON.stringify(input)};
-        const inputLines = input.trim().split('\\n');
-        let currentLine = 0;
+        const inputData = ${JSON.stringify(input)};
+        const inputLines = inputData.trim().split('\\n');
+        let currentLineIndex = 0;
         
         function readline() {
-          return currentLine < inputLines.length ? inputLines[currentLine++] : '';
+          if (currentLineIndex < inputLines.length) {
+            return inputLines[currentLineIndex++];
+          }
+          return '';
         }
         
         let output = '';
@@ -143,34 +156,36 @@ char* solution() {
         try {
           ${code}
           
+          let result;
           if (typeof solution === 'function') {
-            const result = solution();
-            if (result !== undefined) {
-              console.log(result);
-            }
+            result = solution();
+          } else if (typeof solve === 'function') {
+            result = solve();
           }
           
+          if (result !== undefined && result !== null) {
+            console.log(result);
+          }
+          
+          console.log = originalConsoleLog;
           return output.trim();
         } catch (error) {
+          console.log = originalConsoleLog;
           throw new Error('Runtime Error: ' + error.message);
         }
       `;
       
-      const result = new Function(wrappedCode)();
+      const func = new Function(wrappedCode);
+      const result = func();
       return { output: result || '' };
     } catch (error) {
       return { output: '', error: error instanceof Error ? error.message : 'Execution error' };
     }
   };
 
-  const executePython = async (code: string, input: string): Promise<{ output: string; error?: string }> => {
-    // For now, return a placeholder since we need a Python runtime
-    return { output: 'Python execution not available in preview mode', error: 'Not implemented' };
-  };
-
   const handleRun = async () => {
     if (!testCases || testCases.length === 0) {
-      setTestResults([{ passed: false, input: '', expected: '', actual: '', error: 'No test cases available' }]);
+      toast.error('No test cases available for this problem');
       return;
     }
 
@@ -182,7 +197,14 @@ char* solution() {
     const casesToTest = sampleTestCases.length > 0 ? sampleTestCases : testCases.slice(0, 3);
 
     for (const testCase of casesToTest) {
-      const result = await executeCode(code, language, testCase.input_data);
+      let result;
+      
+      if (language === 'javascript') {
+        result = await executeJavaScript(code, testCase.input_data);
+      } else {
+        result = { output: '', error: `${language} execution not supported in preview mode` };
+      }
+      
       const passed = result.output.trim() === testCase.expected_output.trim() && !result.error;
       
       results.push({
@@ -196,11 +218,23 @@ char* solution() {
 
     setTestResults(results);
     setIsRunning(false);
+
+    const passedCount = results.filter(r => r.passed).length;
+    if (passedCount === results.length) {
+      toast.success(`All ${passedCount} test cases passed!`);
+    } else {
+      toast.error(`${passedCount}/${results.length} test cases passed`);
+    }
   };
 
   const handleSubmit = async () => {
     if (!problemId || !contestId) {
-      console.error("Problem ID and Contest ID are required for submission");
+      toast.error("Problem ID and Contest ID are required for submission");
+      return;
+    }
+
+    if (!code.trim()) {
+      toast.error("Please write some code before submitting");
       return;
     }
 
@@ -213,14 +247,14 @@ char* solution() {
       });
       
       if (submission?.id) {
-        setLastSubmissionId(submission.id);
-        // Trigger evaluation
         await evaluateSubmission.mutateAsync(submission.id);
+        toast.success("Code submitted and evaluation started!");
       }
       
       onSubmit?.();
     } catch (error) {
       console.error("Submission failed:", error);
+      toast.error("Failed to submit code. Please try again.");
     }
   };
 
@@ -246,7 +280,7 @@ char* solution() {
             </Select>
             <Button
               onClick={handleRun}
-              disabled={isRunning}
+              disabled={isRunning || !testCases || testCases.length === 0}
               variant="outline"
               className="border-slate-600 text-slate-300 hover:text-white"
             >
@@ -338,22 +372,22 @@ char* solution() {
                   <div className="space-y-2 text-xs">
                     <div>
                       <span className="text-slate-400">Input: </span>
-                      <span className="text-slate-300">{result.input}</span>
+                      <span className="text-slate-300 font-mono">{result.input}</span>
                     </div>
                     <div>
                       <span className="text-slate-400">Expected: </span>
-                      <span className="text-slate-300">{result.expected}</span>
+                      <span className="text-slate-300 font-mono">{result.expected}</span>
                     </div>
                     <div>
                       <span className="text-slate-400">Your Output: </span>
-                      <span className={result.passed ? 'text-green-400' : 'text-red-400'}>
+                      <span className={`font-mono ${result.passed ? 'text-green-400' : 'text-red-400'}`}>
                         {result.actual || 'No output'}
                       </span>
                     </div>
                     {result.error && (
                       <div>
                         <span className="text-slate-400">Error: </span>
-                        <span className="text-red-400">{result.error}</span>
+                        <span className="text-red-400 font-mono">{result.error}</span>
                       </div>
                     )}
                   </div>

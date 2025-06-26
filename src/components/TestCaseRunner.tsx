@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, XCircle, Play, Clock } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface TestCase {
   id: string;
@@ -30,17 +31,73 @@ const TestCaseRunner = ({ testCases, code, language, onRunComplete }: TestCaseRu
     executionTime: number;
   }>>([]);
 
+  const executeJavaScript = async (code: string, input: string): Promise<{ output: string; error?: string }> => {
+    try {
+      const wrappedCode = `
+        const inputData = ${JSON.stringify(input)};
+        const inputLines = inputData.trim().split('\\n');
+        let currentLineIndex = 0;
+        
+        function readline() {
+          if (currentLineIndex < inputLines.length) {
+            return inputLines[currentLineIndex++];
+          }
+          return '';
+        }
+        
+        let output = '';
+        const originalConsoleLog = console.log;
+        console.log = (...args) => {
+          output += args.join(' ') + '\\n';
+        };
+        
+        try {
+          ${code}
+          
+          let result;
+          if (typeof solution === 'function') {
+            result = solution();
+          } else if (typeof solve === 'function') {
+            result = solve();
+          }
+          
+          if (result !== undefined && result !== null) {
+            console.log(result);
+          }
+          
+          console.log = originalConsoleLog;
+          return output.trim();
+        } catch (error) {
+          console.log = originalConsoleLog;
+          throw new Error('Runtime Error: ' + error.message);
+        }
+      `;
+      
+      const func = new Function(wrappedCode);
+      const result = func();
+      return { output: result || '' };
+    } catch (error) {
+      return { output: '', error: error instanceof Error ? error.message : 'Execution error' };
+    }
+  };
+
   const executeTestCase = async (testCase: TestCase) => {
     const startTime = Date.now();
     
     try {
-      // Simulate code execution - in a real implementation, this would call the edge function
-      const result = await executeCode(code, language, testCase.input_data);
+      let result;
+      
+      if (language === 'javascript') {
+        result = await executeJavaScript(code, testCase.input_data);
+      } else {
+        result = { output: '', error: `${language} execution not supported in preview mode` };
+      }
+      
       const executionTime = Date.now() - startTime;
       
       return {
         testCaseId: testCase.id,
-        passed: result.output.trim() === testCase.expected_output.trim(),
+        passed: result.output.trim() === testCase.expected_output.trim() && !result.error,
         output: result.output,
         error: result.error,
         executionTime
@@ -56,16 +113,12 @@ const TestCaseRunner = ({ testCases, code, language, onRunComplete }: TestCaseRu
     }
   };
 
-  const executeCode = async (code: string, language: string, input: string) => {
-    // This would be replaced with actual code execution logic
-    // For now, return a mock result
-    return {
-      output: 'Mock output for testing',
-      error: undefined
-    };
-  };
-
   const runAllTests = async () => {
+    if (!code.trim()) {
+      toast.error("Please write some code before running tests");
+      return;
+    }
+
     setIsRunning(true);
     const testResults = [];
     
@@ -77,6 +130,13 @@ const TestCaseRunner = ({ testCases, code, language, onRunComplete }: TestCaseRu
     setResults(testResults);
     setIsRunning(false);
     onRunComplete?.(testResults);
+
+    const passedCount = testResults.filter(r => r.passed).length;
+    if (passedCount === testResults.length) {
+      toast.success(`All ${passedCount} test cases passed!`);
+    } else {
+      toast.error(`${passedCount}/${testResults.length} test cases passed`);
+    }
   };
 
   const passedTests = results.filter(r => r.passed).length;
@@ -96,7 +156,7 @@ const TestCaseRunner = ({ testCases, code, language, onRunComplete }: TestCaseRu
           </CardTitle>
           <Button
             onClick={runAllTests}
-            disabled={isRunning || testCases.length === 0}
+            disabled={isRunning || testCases.length === 0 || !code.trim()}
             size="sm"
             className="bg-blue-600 hover:bg-blue-700"
           >
@@ -146,14 +206,14 @@ const TestCaseRunner = ({ testCases, code, language, onRunComplete }: TestCaseRu
               <div className="space-y-2 text-sm">
                 <div>
                   <span className="text-slate-400">Input:</span>
-                  <pre className="text-slate-300 bg-slate-800 p-2 rounded mt-1 overflow-x-auto">
+                  <pre className="text-slate-300 bg-slate-800 p-2 rounded mt-1 overflow-x-auto font-mono">
                     {testCase.input_data}
                   </pre>
                 </div>
                 
                 <div>
                   <span className="text-slate-400">Expected Output:</span>
-                  <pre className="text-slate-300 bg-slate-800 p-2 rounded mt-1 overflow-x-auto">
+                  <pre className="text-slate-300 bg-slate-800 p-2 rounded mt-1 overflow-x-auto font-mono">
                     {testCase.expected_output}
                   </pre>
                 </div>
@@ -162,7 +222,7 @@ const TestCaseRunner = ({ testCases, code, language, onRunComplete }: TestCaseRu
                   <>
                     <div>
                       <span className="text-slate-400">Your Output:</span>
-                      <pre className={`p-2 rounded mt-1 overflow-x-auto ${
+                      <pre className={`p-2 rounded mt-1 overflow-x-auto font-mono ${
                         result.passed ? 'text-green-400 bg-green-900/20' : 'text-red-400 bg-red-900/20'
                       }`}>
                         {result.output || 'No output'}
@@ -172,7 +232,7 @@ const TestCaseRunner = ({ testCases, code, language, onRunComplete }: TestCaseRu
                     {result.error && (
                       <div>
                         <span className="text-slate-400">Error:</span>
-                        <pre className="text-red-400 bg-red-900/20 p-2 rounded mt-1 overflow-x-auto">
+                        <pre className="text-red-400 bg-red-900/20 p-2 rounded mt-1 overflow-x-auto font-mono">
                           {result.error}
                         </pre>
                       </div>
