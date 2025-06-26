@@ -11,8 +11,22 @@ export const useContests = () => {
       const { data, error } = await supabase
         .from('contests')
         .select('*')
-        .eq('status', 'active')
-        .order('start_time', { ascending: true });
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+  });
+};
+
+export const useAdminContests = () => {
+  return useQuery({
+    queryKey: ['admin-contests'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('contests')
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data;

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateContest } from '@/hooks/useAdmin';
 import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 
 const CreateContestForm = () => {
   const [formData, setFormData] = useState({
@@ -19,6 +19,7 @@ const CreateContestForm = () => {
 
   const createContest = useCreateContest();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +82,9 @@ const CreateContestForm = () => {
         duration_minutes: 180,
         max_participants: '',
       });
+      // Refresh the contest list
+      queryClient.invalidateQueries({ queryKey: ['admin-contests'] });
+      queryClient.invalidateQueries({ queryKey: ['contests'] });
     } catch (error) {
       console.error('Contest creation failed:', error);
     }

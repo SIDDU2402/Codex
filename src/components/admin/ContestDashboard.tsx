@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useContests, useContestLeaderboard } from '@/hooks/useContests';
+import { useAdminContests, useContestLeaderboard } from '@/hooks/useContests';
 import { useUpdateContestStatus } from '@/hooks/useAdmin';
 import { Play, Pause, Square, Users, Trophy, Clock } from 'lucide-react';
 import CreateContestForm from './CreateContestForm';
@@ -12,12 +12,26 @@ import ProblemManager from './ProblemManager';
 
 const ContestDashboard = () => {
   const [selectedContest, setSelectedContest] = useState<string | null>(null);
-  const { data: contests } = useContests();
+  const { data: contests, isLoading, refetch } = useAdminContests();
   const updateContestStatus = useUpdateContestStatus();
 
   const handleStatusUpdate = (contestId: string, status: string) => {
-    updateContestStatus.mutate({ contestId, status });
+    updateContestStatus.mutate({ contestId, status }, {
+      onSuccess: () => {
+        refetch();
+      }
+    });
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center text-white">Loading contests...</div>
+        </div>
+      </div>
+    );
+  }
 
   const activeContests = contests?.filter(c => c.status === 'active') || [];
   const draftContests = contests?.filter(c => c.status === 'draft') || [];
@@ -79,15 +93,23 @@ const ContestDashboard = () => {
 
             <div className="space-y-4">
               <h2 className="text-xl font-semibold text-white">All Contests</h2>
-              {contests?.map((contest) => (
-                <ContestCard 
-                  key={contest.id}
-                  contest={contest}
-                  onStatusUpdate={handleStatusUpdate}
-                  onSelect={() => setSelectedContest(contest.id)}
-                  isSelected={selectedContest === contest.id}
-                />
-              ))}
+              {contests && contests.length > 0 ? (
+                contests.map((contest) => (
+                  <ContestCard 
+                    key={contest.id}
+                    contest={contest}
+                    onStatusUpdate={handleStatusUpdate}
+                    onSelect={() => setSelectedContest(contest.id)}
+                    isSelected={selectedContest === contest.id}
+                  />
+                ))
+              ) : (
+                <Card className="bg-slate-800 border-slate-700">
+                  <CardContent className="p-6 text-center">
+                    <p className="text-slate-400">No contests created yet</p>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </TabsContent>
 
