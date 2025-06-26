@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { useCreateProblem, useCreateTestCase, useTestCases } from '@/hooks/useAdmin';
 import { useContestProblems } from '@/hooks/useContests';
-import { Plus, TestTube } from 'lucide-react';
+import { Plus, TestTube, Play, Eye, Trash2 } from 'lucide-react';
+import EnhancedProblemView from '../EnhancedProblemView';
 
 interface ProblemManagerProps {
   contestId: string;
@@ -18,6 +18,7 @@ interface ProblemManagerProps {
 const ProblemManager = ({ contestId }: ProblemManagerProps) => {
   const [showProblemForm, setShowProblemForm] = useState(false);
   const [showTestCaseForm, setShowTestCaseForm] = useState<string | null>(null);
+  const [previewProblem, setPreviewProblem] = useState<string | null>(null);
   const [problemForm, setProblemForm] = useState({
     title: '',
     description: '',
@@ -79,6 +80,30 @@ const ProblemManager = ({ contestId }: ProblemManagerProps) => {
     });
     setShowTestCaseForm(null);
   };
+
+  // If preview mode is active, show the enhanced problem view
+  if (previewProblem) {
+    const problem = problems?.find(p => p.id === previewProblem);
+    if (problem) {
+      return (
+        <div className="h-screen">
+          <div className="p-4 bg-slate-800 border-b border-slate-700">
+            <Button
+              onClick={() => setPreviewProblem(null)}
+              variant="outline"
+              className="border-slate-600 text-slate-300"
+            >
+              ← Back to Problem Manager
+            </Button>
+          </div>
+          <EnhancedProblemView
+            problem={problem}
+            contestId={contestId}
+          />
+        </div>
+      );
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -214,6 +239,7 @@ const ProblemManager = ({ contestId }: ProblemManagerProps) => {
             key={problem.id}
             problem={problem}
             onAddTestCase={() => setShowTestCaseForm(problem.id)}
+            onPreview={() => setPreviewProblem(problem.id)}
             showTestCaseForm={showTestCaseForm === problem.id}
             onSubmitTestCase={(e) => handleCreateTestCase(e, problem.id)}
             testCaseForm={testCaseForm}
@@ -229,6 +255,7 @@ const ProblemManager = ({ contestId }: ProblemManagerProps) => {
 const ProblemCard = ({ 
   problem, 
   onAddTestCase, 
+  onPreview,
   showTestCaseForm, 
   onSubmitTestCase, 
   testCaseForm, 
@@ -257,16 +284,30 @@ const ProblemCard = ({
               <Badge variant="outline" className="text-slate-300 border-slate-600">
                 {testCases?.length || 0} test cases
               </Badge>
+              <Badge variant="outline" className="text-slate-300 border-slate-600">
+                {problem.time_limit_seconds}s / {problem.memory_limit_mb}MB
+              </Badge>
             </div>
           </div>
-          <Button
-            onClick={onAddTestCase}
-            size="sm"
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            <TestTube className="h-4 w-4 mr-2" />
-            Add Test Case
-          </Button>
+          <div className="flex space-x-2">
+            <Button
+              onClick={onPreview}
+              size="sm"
+              variant="outline"
+              className="border-slate-600 text-slate-300"
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              Preview
+            </Button>
+            <Button
+              onClick={onAddTestCase}
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <TestTube className="h-4 w-4 mr-2" />
+              Add Test Case
+            </Button>
+          </div>
         </div>
       </CardHeader>
       

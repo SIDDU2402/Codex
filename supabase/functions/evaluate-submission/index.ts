@@ -66,6 +66,8 @@ serve(async (req) => {
     let totalScore = 0;
     let passedTestCases = 0;
     const results: EvaluationResult[] = [];
+    let maxExecutionTime = 0;
+    let maxMemoryUsed = 0;
 
     // Evaluate each test case
     for (const testCase of testCases) {
@@ -76,12 +78,15 @@ serve(async (req) => {
           testCase.input_data
         );
 
-        const passed = result.output.trim() === testCase.expected_output.trim();
+        const passed = result.output.trim() === testCase.expected_output.trim() && !result.error;
         
         if (passed) {
           totalScore += testCase.points || 0;
           passedTestCases++;
         }
+
+        maxExecutionTime = Math.max(maxExecutionTime, result.execution_time || 0);
+        maxMemoryUsed = Math.max(maxMemoryUsed, result.memory_used || 0);
 
         results.push({
           ...result,
@@ -109,8 +114,8 @@ serve(async (req) => {
         score: totalScore,
         test_cases_passed: passedTestCases,
         total_test_cases: testCases.length,
-        execution_time_ms: Math.max(...results.map(r => r.execution_time || 0)),
-        memory_used_mb: Math.max(...results.map(r => r.memory_used || 0))
+        execution_time_ms: maxExecutionTime,
+        memory_used_mb: maxMemoryUsed
       })
       .eq('id', submissionId);
 
@@ -120,7 +125,8 @@ serve(async (req) => {
         status: finalStatus,
         score: totalScore,
         passedTestCases,
-        totalTestCases: testCases.length
+        totalTestCases: testCases.length,
+        results: results
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -161,8 +167,18 @@ async function evaluateCode(
       case 'python':
         output = await executePython(code, input);
         break;
+      case 'java':
+        output = await executeJava(code, input);
+        break;
+      case 'cpp':
+      case 'c++':
+        output = await executeCpp(code, input);
+        break;
+      case 'c':
+        output = await executeC(code, input);
+        break;
       default:
-        throw new Error(`Language ${language} is not supported yet`);
+        throw new Error(`Language ${language} is not supported`);
     }
     
     const executionTime = Date.now() - startTime;
@@ -185,7 +201,6 @@ async function evaluateCode(
 }
 
 async function executeJavaScript(code: string, input: string): Promise<string> {
-  // Create a sandboxed execution environment
   const wrappedCode = `
     const input = ${JSON.stringify(input)};
     const inputLines = input.trim().split('\\n');
@@ -204,9 +219,14 @@ async function executeJavaScript(code: string, input: string): Promise<string> {
     try {
       ${code}
       
-      // If there's a solution function, call it
+      // Try different function names
       if (typeof solution === 'function') {
         const result = solution();
+        if (result !== undefined) {
+          console.log(result);
+        }
+      } else if (typeof solve === 'function') {
+        const result = solve();
         if (result !== undefined) {
           console.log(result);
         }
@@ -218,15 +238,67 @@ async function executeJavaScript(code: string, input: string): Promise<string> {
     }
   `;
   
-  // Execute with timeout
   const result = await executeWithTimeout(wrappedCode, 5000);
   return result;
 }
 
 async function executePython(code: string, input: string): Promise<string> {
-  // For Python, we'd need to use a Python runtime or subprocess
-  // This is a placeholder implementation
-  throw new Error('Python execution not implemented yet in this demo');
+  // For a real implementation, you would use Deno's subprocess API to run Python
+  // This is a simplified version that shows the structure
+  const pythonCode = `
+import sys
+from io import StringIO
+
+# Redirect input
+sys.stdin = StringIO("""${input}""")
+
+# Redirect output
+old_stdout = sys.stdout
+sys.stdout = StringIO()
+
+try:
+    ${code.split('\n').map(line => '    ' + line).join('\n')}
+    
+    # Try to call common function names
+    if 'solution' in locals():
+        result = solution()
+        if result is not None:
+            print(result)
+    elif 'solve' in locals():
+        result = solve()
+        if result is not None:
+            print(result)
+            
+    output = sys.stdout.getvalue()
+    sys.stdout = old_stdout
+    print(output.strip())
+    
+except Exception as e:
+    sys.stdout = old_stdout
+    raise Exception(f"Runtime Error: {str(e)}")
+  `;
+  
+  // In a real implementation, you would execute this Python code
+  // For now, return a placeholder
+  throw new Error('Python execution requires Python runtime setup');
+}
+
+async function executeJava(code: string, input: string): Promise<string> {
+  // Java execution would require compilation and execution
+  // This is a placeholder for the structure
+  throw new Error('Java execution requires Java runtime setup');
+}
+
+async function executeCpp(code: string, input: string): Promise<string> {
+  // C++ execution would require compilation with g++ and execution
+  // This is a placeholder for the structure
+  throw new Error('C++ execution requires C++ compiler setup');
+}
+
+async function executeC(code: string, input: string): Promise<string> {
+  // C execution would require compilation with gcc and execution
+  // This is a placeholder for the structure
+  throw new Error('C execution requires C compiler setup');
 }
 
 async function executeWithTimeout(code: string, timeoutMs: number): Promise<string> {
@@ -236,7 +308,6 @@ async function executeWithTimeout(code: string, timeoutMs: number): Promise<stri
     }, timeoutMs);
     
     try {
-      // Use eval in a controlled manner (not recommended for production)
       const func = new Function(code);
       const result = func();
       clearTimeout(timeout);
