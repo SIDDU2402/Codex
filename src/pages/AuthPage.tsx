@@ -26,41 +26,27 @@ const AuthPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const fetchUserProfile = async (userId: string, fallbackEmail?: string): Promise<UserProfile | null> => {
+  const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
     try {
-      // First attempt with user ID
-      const { data: profile, error: profileError } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', userId)
         .single();
         
-      if (!profileError && profile) {
-        return profile as UserProfile;
+      if (error) {
+        console.error('Profile fetch error:', error);
+        return null;
       }
       
-      // Fallback attempt with email if provided
-      if (fallbackEmail) {
-        const { data: emailProfile, error: emailError } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('email', fallbackEmail)
-          .single();
-          
-        if (!emailError && emailProfile) {
-          return emailProfile as UserProfile;
-        }
-      }
-      
-      console.error('Profile fetch error:', profileError);
-      return null;
+      return data as UserProfile;
     } catch (error) {
       console.error('Error fetching profile:', error);
       return null;
     }
   };
 
-  const handleSuccessfulLogin = async (): Promise<void> => {
+  const handleSuccessfulLogin = async () => {
     toast({
       title: "Welcome back!",
       description: "You have successfully signed in.",
@@ -75,7 +61,7 @@ const AuthPage = () => {
         return;
       }
       
-      const profile = await fetchUserProfile(userId, email);
+      const profile = await fetchUserProfile(userId);
       
       if (profile?.role === 'admin') {
         navigate('/admin');
@@ -88,7 +74,7 @@ const AuthPage = () => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
