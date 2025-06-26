@@ -39,10 +39,48 @@ const AuthPage = () => {
             title: "Welcome back!",
             description: "You have successfully signed in.",
           });
-         
-          navigate('/');
+          // Fetch user role after login
+          try {
+            const { supabase } = await import('@/integrations/supabase/client');
+            const { data: { session } } = await supabase.auth.getSession();
+            const userId = session?.user?.id;
+            if (!userId) {
+              navigate('/');
+              return;
+            }
+            const { data: profile, error: profileError } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', userId)
+              .single();
+            if (profileError) {
+              navigate('/');
+            } else if (profile?.role === 'admin') {
+              navigate('/admin');
+            } else {
+              navigate('/');
+            }
+          } catch (e) {
+          const { data, error: profileError } = await window.supabase
+            .from('profiles')
+            .select('role')
+            .eq('email', email)
+            .single();
+          if (profileError) {
+            console.error('Supabase profile fetch error:', profileError);
+            toast({
+              title: "Profile Error",
+              description: profileError.message || "Could not fetch user profile.",
+              variant: "destructive",
+            });
+            navigate('/');
+          } else if (data?.role === 'admin') {
+            navigate('/admin');
+          } else {
+            navigate('/');
+          }
         }
-        
+        }
       } else {
         const { error } = await signUp(email, password, fullName, username);
         if (error) {
