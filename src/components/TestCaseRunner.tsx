@@ -31,6 +31,50 @@ const TestCaseRunner = ({ testCases, code, language, onRunComplete }: TestCaseRu
     executionTime: number;
   }>>([]);
 
+  const executePython = async (code: string, input: string): Promise<{ output: string; error?: string }> => {
+    try {
+      // For local preview, provide basic simulation for Python
+      const lines = input.trim().split('\n');
+      
+      // Simple pattern matching for basic operations
+      if (code.includes('input().strip()') && code.includes('print(')) {
+        // Basic echo for demonstration
+        return { output: lines[0] || '', error: 'Note: This is a simulated result. Server-side execution will be more accurate.' };
+      }
+      
+      if (code.includes('def solution():') && code.includes('return')) {
+        // Try to extract simple return values
+        return { output: lines[0] || '', error: 'Note: Complex Python logic requires server-side execution for accurate results.' };
+      }
+      
+      return { output: 'Python execution requires server-side processing', error: 'Submit your code for full Python execution' };
+    } catch (error) {
+      return { output: '', error: error instanceof Error ? error.message : 'Python execution error' };
+    }
+  };
+
+  const executeJava = async (code: string, input: string): Promise<{ output: string; error?: string }> => {
+    try {
+      // For local preview, provide basic simulation for Java
+      const lines = input.trim().split('\n');
+      
+      // Simple pattern matching for basic operations
+      if (code.includes('scanner.nextLine()') && code.includes('System.out.println')) {
+        // Basic echo for demonstration
+        return { output: lines[0] || '', error: 'Note: This is a simulated result. Server-side execution will be more accurate.' };
+      }
+      
+      if (code.includes('public String solve(') && code.includes('return')) {
+        // Try to extract simple return values
+        return { output: lines[0] || '', error: 'Note: Complex Java logic requires server-side execution for accurate results.' };
+      }
+      
+      return { output: 'Java execution requires server-side compilation', error: 'Submit your code for full Java execution' };
+    } catch (error) {
+      return { output: '', error: error instanceof Error ? error.message : 'Java execution error' };
+    }
+  };
+
   const executeJavaScript = async (code: string, input: string): Promise<{ output: string; error?: string }> => {
     try {
       const wrappedCode = `
@@ -53,18 +97,6 @@ const TestCaseRunner = ({ testCases, code, language, onRunComplete }: TestCaseRu
         
         try {
           ${code}
-          
-          let result;
-          if (typeof solution === 'function') {
-            result = solution();
-          } else if (typeof solve === 'function') {
-            result = solve();
-          }
-          
-          if (result !== undefined && result !== null) {
-            console.log(result);
-          }
-          
           console.log = originalConsoleLog;
           return output.trim();
         } catch (error) {
@@ -87,10 +119,18 @@ const TestCaseRunner = ({ testCases, code, language, onRunComplete }: TestCaseRu
     try {
       let result;
       
-      if (language === 'javascript') {
-        result = await executeJavaScript(code, testCase.input_data);
-      } else {
-        result = { output: '', error: `${language} execution not supported in preview mode` };
+      switch (language.toLowerCase()) {
+        case 'python':
+          result = await executePython(code, testCase.input_data);
+          break;
+        case 'java':
+          result = await executeJava(code, testCase.input_data);
+          break;
+        case 'javascript':
+          result = await executeJavaScript(code, testCase.input_data);
+          break;
+        default:
+          result = { output: '', error: `${language} execution not supported in preview mode` };
       }
       
       const executionTime = Date.now() - startTime;
@@ -135,7 +175,11 @@ const TestCaseRunner = ({ testCases, code, language, onRunComplete }: TestCaseRu
     if (passedCount === testResults.length) {
       toast.success(`All ${passedCount} test cases passed!`);
     } else {
-      toast.error(`${passedCount}/${testResults.length} test cases passed`);
+      if (language === 'python' || language === 'java') {
+        toast.info(`Preview: ${passedCount}/${testResults.length} test cases passed. Submit for accurate ${language} evaluation.`);
+      } else {
+        toast.error(`${passedCount}/${testResults.length} test cases passed`);
+      }
     }
   };
 
@@ -148,6 +192,11 @@ const TestCaseRunner = ({ testCases, code, language, onRunComplete }: TestCaseRu
         <div className="flex items-center justify-between">
           <CardTitle className="text-white flex items-center">
             Test Cases
+            {(language === 'python' || language === 'java') && (
+              <Badge className="ml-2 bg-blue-600 text-white text-xs">
+                Preview Mode
+              </Badge>
+            )}
             {results.length > 0 && (
               <Badge className={`ml-2 ${passedTests === totalTests ? 'bg-green-600' : 'bg-red-600'}`}>
                 {passedTests}/{totalTests} Passed
@@ -173,6 +222,14 @@ const TestCaseRunner = ({ testCases, code, language, onRunComplete }: TestCaseRu
             )}
           </Button>
         </div>
+        {(language === 'python' || language === 'java') && (
+          <div className="mt-2 p-2 bg-blue-900/20 border border-blue-700 rounded">
+            <p className="text-blue-300 text-sm">
+              <strong>Preview Mode:</strong> {language === 'python' ? 'Python' : 'Java'} code will be fully executed on the server when submitted. 
+              These results are for preview only.
+            </p>
+          </div>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
         {testCases.map((testCase, index) => {
@@ -231,8 +288,12 @@ const TestCaseRunner = ({ testCases, code, language, onRunComplete }: TestCaseRu
                     
                     {result.error && (
                       <div>
-                        <span className="text-slate-400">Error:</span>
-                        <pre className="text-red-400 bg-red-900/20 p-2 rounded mt-1 overflow-x-auto font-mono">
+                        <span className="text-slate-400">
+                          {result.error.includes('Note:') ? 'Info:' : 'Error:'}
+                        </span>
+                        <pre className={`p-2 rounded mt-1 overflow-x-auto font-mono ${
+                          result.error.includes('Note:') ? 'text-blue-400 bg-blue-900/20' : 'text-red-400 bg-red-900/20'
+                        }`}>
                           {result.error}
                         </pre>
                       </div>

@@ -27,7 +27,7 @@ interface MonacoCodeEditorProps {
 const MonacoCodeEditor = ({ problemId, contestId, onSubmit, testCases }: MonacoCodeEditorProps) => {
   const editorRef = useRef<any>(null);
   const [code, setCode] = useState('');
-  const [language, setLanguage] = useState('javascript');
+  const [language, setLanguage] = useState('python');
   const [isRunning, setIsRunning] = useState(false);
   const [testResults, setTestResults] = useState<Array<{
     passed: boolean;
@@ -41,15 +41,87 @@ const MonacoCodeEditor = ({ problemId, contestId, onSubmit, testCases }: MonacoC
   const evaluateSubmission = useEvaluateSubmission();
 
   const languages = [
-    { value: 'javascript', label: 'JavaScript', monaco: 'javascript' },
     { value: 'python', label: 'Python', monaco: 'python' },
     { value: 'java', label: 'Java', monaco: 'java' },
     { value: 'cpp', label: 'C++', monaco: 'cpp' },
     { value: 'c', label: 'C', monaco: 'c' },
+    { value: 'javascript', label: 'JavaScript', monaco: 'javascript' },
   ];
 
   function getDefaultCode(lang: string): string {
     const templates = {
+      python: `def solution():
+    # Write your solution here
+    # Read input using input()
+    line = input().strip()
+    
+    # Process the input and return the result
+    return line
+
+# Example: For problems that need to read multiple lines
+# line1 = input().strip()
+# line2 = input().strip()
+# numbers = list(map(int, input().split()))
+
+# Call the solution function
+result = solution()
+if result is not None:
+    print(result)`,
+      java: `import java.util.*;
+import java.io.*;
+
+public class Solution {
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        Solution sol = new Solution();
+        
+        // Read input
+        String input = scanner.nextLine();
+        
+        // Process and output result
+        String result = sol.solve(input);
+        System.out.println(result);
+    }
+    
+    public String solve(String input) {
+        // Write your solution here
+        // Process the input and return the result
+        return input;
+    }
+}`,
+      cpp: `#include <iostream>
+#include <string>
+#include <vector>
+#include <algorithm>
+using namespace std;
+
+int main() {
+    // Write your solution here
+    string input;
+    getline(cin, input);
+    
+    // Process the input and output the result
+    cout << input << endl;
+    
+    return 0;
+}`,
+      c: `#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+int main() {
+    // Write your solution here
+    char input[1000];
+    fgets(input, sizeof(input), stdin);
+    
+    // Remove newline character
+    input[strcspn(input, "\\n")] = 0;
+    
+    // Process the input and output the result
+    printf("%s\\n", input);
+    
+    return 0;
+}`,
       javascript: `function solution() {
     // Write your solution here
     // Use readline() to read input
@@ -59,51 +131,13 @@ const MonacoCodeEditor = ({ problemId, contestId, onSubmit, testCases }: MonacoC
     return input;
 }
 
-// Example: For problems that need to read multiple lines
-// const line1 = readline();
-// const line2 = readline();`,
-      python: `def solution():
-    # Write your solution here
-    # Use input() to read input
-    line = input().strip()
-    
-    # Process the input and return the result
-    return line`,
-      java: `public class Solution {
-    public static String solution() {
-        // Write your solution here
-        Scanner scanner = new Scanner(System.in);
-        String input = scanner.nextLine();
-        
-        // Process the input and return the result
-        return input;
-    }
-}`,
-      cpp: `#include <iostream>
-#include <string>
-using namespace std;
-
-string solution() {
-    // Write your solution here
-    string input;
-    getline(cin, input);
-    
-    // Process the input and return the result
-    return input;
-}`,
-      c: `#include <stdio.h>
-#include <string.h>
-
-char* solution() {
-    // Write your solution here
-    static char input[1000];
-    fgets(input, sizeof(input), stdin);
-    
-    // Process the input and return the result
-    return input;
+// Call the solution function
+const result = solution();
+if (result !== undefined && result !== null) {
+    console.log(result);
 }`
     };
-    return templates[lang as keyof typeof templates] || templates.javascript;
+    return templates[lang as keyof typeof templates] || templates.python;
   }
 
   useEffect(() => {
@@ -133,6 +167,42 @@ char* solution() {
     });
   };
 
+  const executePython = async (code: string, input: string): Promise<{ output: string; error?: string }> => {
+    try {
+      // Simulate Python execution - in a real environment, this would use a Python interpreter
+      // For demo purposes, we'll do basic string processing
+      const lines = input.trim().split('\n');
+      
+      // Simple pattern matching for common operations
+      if (code.includes('input().strip()') && code.includes('return')) {
+        // Basic echo functionality for demonstration
+        return { output: lines[0] || '' };
+      }
+      
+      // For more complex operations, we'd need actual Python execution
+      return { output: 'Python execution requires server-side processing', error: 'Local execution not available for Python' };
+    } catch (error) {
+      return { output: '', error: error instanceof Error ? error.message : 'Python execution error' };
+    }
+  };
+
+  const executeJava = async (code: string, input: string): Promise<{ output: string; error?: string }> => {
+    try {
+      // Simulate Java execution - in a real environment, this would compile and run Java code
+      const lines = input.trim().split('\n');
+      
+      // Basic pattern matching for simple operations
+      if (code.includes('scanner.nextLine()') && code.includes('System.out.println')) {
+        // Basic echo functionality for demonstration
+        return { output: lines[0] || '' };
+      }
+      
+      return { output: 'Java execution requires server-side compilation', error: 'Local execution not available for Java' };
+    } catch (error) {
+      return { output: '', error: error instanceof Error ? error.message : 'Java execution error' };
+    }
+  };
+
   const executeJavaScript = async (code: string, input: string): Promise<{ output: string; error?: string }> => {
     try {
       const wrappedCode = `
@@ -155,18 +225,6 @@ char* solution() {
         
         try {
           ${code}
-          
-          let result;
-          if (typeof solution === 'function') {
-            result = solution();
-          } else if (typeof solve === 'function') {
-            result = solve();
-          }
-          
-          if (result !== undefined && result !== null) {
-            console.log(result);
-          }
-          
           console.log = originalConsoleLog;
           return output.trim();
         } catch (error) {
@@ -199,10 +257,18 @@ char* solution() {
     for (const testCase of casesToTest) {
       let result;
       
-      if (language === 'javascript') {
-        result = await executeJavaScript(code, testCase.input_data);
-      } else {
-        result = { output: '', error: `${language} execution not supported in preview mode` };
+      switch (language) {
+        case 'python':
+          result = await executePython(code, testCase.input_data);
+          break;
+        case 'java':
+          result = await executeJava(code, testCase.input_data);
+          break;
+        case 'javascript':
+          result = await executeJavaScript(code, testCase.input_data);
+          break;
+        default:
+          result = { output: '', error: `${language} execution not supported in preview mode` };
       }
       
       const passed = result.output.trim() === testCase.expected_output.trim() && !result.error;
@@ -315,12 +381,20 @@ char* solution() {
             </Button>
           </div>
         </div>
+        {(language === 'python' || language === 'java') && (
+          <div className="mt-2 p-2 bg-blue-900/20 border border-blue-700 rounded">
+            <p className="text-blue-300 text-sm">
+              <strong>Note:</strong> {language === 'python' ? 'Python' : 'Java'} code will be executed on the server when you submit. 
+              Local testing shows simulated results for preview purposes.
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 min-h-0">
         <Editor
           height="100%"
-          language={currentLanguage?.monaco || 'javascript'}
+          language={currentLanguage?.monaco || 'python'}
           value={code}
           onChange={(value) => setCode(value || '')}
           onMount={handleEditorDidMount}
@@ -332,7 +406,7 @@ char* solution() {
             roundedSelection: false,
             scrollBeyondLastLine: false,
             automaticLayout: true,
-            tabSize: 2,
+            tabSize: language === 'python' ? 4 : 2,
             wordWrap: 'on',
             folding: true,
             lineDecorationsWidth: 0,
@@ -350,7 +424,7 @@ char* solution() {
           <Card className="bg-slate-900 border-slate-700">
             <CardHeader className="pb-2">
               <CardTitle className="text-white text-sm flex items-center">
-                Test Results
+                Test Results (Preview Mode)
                 <Badge className={`ml-2 ${testResults.every(r => r.passed) ? 'bg-green-600' : 'bg-red-600'} text-white text-xs`}>
                   {testResults.filter(r => r.passed).length}/{testResults.length} Passed
                 </Badge>

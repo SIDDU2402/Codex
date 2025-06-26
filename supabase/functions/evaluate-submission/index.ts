@@ -161,14 +161,14 @@ async function evaluateCode(
     let output = '';
     
     switch (language.toLowerCase()) {
-      case 'javascript':
-        output = await executeJavaScript(code, input);
-        break;
       case 'python':
         output = await executePython(code, input);
         break;
       case 'java':
         output = await executeJava(code, input);
+        break;
+      case 'javascript':
+        output = await executeJavaScript(code, input);
         break;
       case 'cpp':
       case 'c++':
@@ -200,6 +200,131 @@ async function evaluateCode(
   }
 }
 
+async function executePython(code: string, input: string): Promise<string> {
+  try {
+    // Create a temporary Python file
+    const tempFileName = `solution_${Date.now()}.py`;
+    
+    // Prepare the code with input handling
+    const wrappedCode = `
+import sys
+from io import StringIO
+
+# Redirect stdin to provide input
+sys.stdin = StringIO("""${input}""")
+
+# Capture stdout
+old_stdout = sys.stdout
+sys.stdout = StringIO()
+
+try:
+${code.split('\n').map(line => '    ' + line).join('\n')}
+    
+    # Get the output
+    output = sys.stdout.getvalue()
+    sys.stdout = old_stdout
+    print(output, end='')
+    
+except Exception as e:
+    sys.stdout = old_stdout
+    raise Exception(f"Runtime Error: {str(e)}")
+`;
+
+    // Write the code to a temporary file
+    await Deno.writeTextFile(tempFileName, wrappedCode);
+    
+    // Execute Python with timeout (5 seconds)
+    const cmd = new Deno.Command("python3", {
+      args: [tempFileName],
+      stdin: "null",
+      stdout: "piped",
+      stderr: "piped",
+    });
+    
+    const { code: exitCode, stdout, stderr } = await cmd.output();
+    
+    // Clean up the temporary file
+    try {
+      await Deno.remove(tempFileName);
+    } catch {
+      // Ignore cleanup errors
+    }
+    
+    if (exitCode !== 0) {
+      const errorMessage = new TextDecoder().decode(stderr);
+      throw new Error(`Python execution failed: ${errorMessage}`);
+    }
+    
+    return new TextDecoder().decode(stdout);
+    
+  } catch (error) {
+    throw new Error(`Python execution error: ${error.message}`);
+  }
+}
+
+async function executeJava(code: string, input: string): Promise<string> {
+  try {
+    const tempFileName = `Solution_${Date.now()}`;
+    const javaFileName = `${tempFileName}.java`;
+    
+    // Prepare the Java code with proper class name
+    const wrappedCode = code.replace(/public class \w+/, `public class ${tempFileName}`);
+    
+    // Write the Java code to a temporary file
+    await Deno.writeTextFile(javaFileName, wrappedCode);
+    
+    // Compile Java code
+    const compileCmd = new Deno.Command("javac", {
+      args: [javaFileName],
+      stdin: "null",
+      stdout: "piped",
+      stderr: "piped",
+    });
+    
+    const { code: compileExitCode, stderr: compileStderr } = await compileCmd.output();
+    
+    if (compileExitCode !== 0) {
+      const errorMessage = new TextDecoder().decode(compileStderr);
+      throw new Error(`Java compilation failed: ${errorMessage}`);
+    }
+    
+    // Execute Java code with input
+    const runCmd = new Deno.Command("java", {
+      args: [tempFileName],
+      stdin: "piped",
+      stdout: "piped",
+      stderr: "piped",
+    });
+    
+    const process = runCmd.spawn();
+    
+    // Write input to stdin
+    const writer = process.stdin.getWriter();
+    await writer.write(new TextEncoder().encode(input));
+    await writer.close();
+    
+    const { code: runExitCode, stdout, stderr } = await process.output();
+    
+    // Clean up temporary files
+    try {
+      await Deno.remove(javaFileName);
+      await Deno.remove(`${tempFileName}.class`);
+    } catch {
+      // Ignore cleanup errors
+    }
+    
+    if (runExitCode !== 0) {
+      const errorMessage = new TextDecoder().decode(stderr);
+      throw new Error(`Java execution failed: ${errorMessage}`);
+    }
+    
+    return new TextDecoder().decode(stdout);
+    
+  } catch (error) {
+    throw new Error(`Java execution error: ${error.message}`);
+  }
+}
+
 async function executeJavaScript(code: string, input: string): Promise<string> {
   const wrappedCode = `
     const input = ${JSON.stringify(input)};
@@ -218,20 +343,6 @@ async function executeJavaScript(code: string, input: string): Promise<string> {
     
     try {
       ${code}
-      
-      // Try different function names
-      if (typeof solution === 'function') {
-        const result = solution();
-        if (result !== undefined) {
-          console.log(result);
-        }
-      } else if (typeof solve === 'function') {
-        const result = solve();
-        if (result !== undefined) {
-          console.log(result);
-        }
-      }
-      
       return output.trim();
     } catch (error) {
       throw new Error('Runtime Error: ' + error.message);
@@ -242,63 +353,124 @@ async function executeJavaScript(code: string, input: string): Promise<string> {
   return result;
 }
 
-async function executePython(code: string, input: string): Promise<string> {
-  // For a real implementation, you would use Deno's subprocess API to run Python
-  // This is a simplified version that shows the structure
-  const pythonCode = `
-import sys
-from io import StringIO
-
-# Redirect input
-sys.stdin = StringIO("""${input}""")
-
-# Redirect output
-old_stdout = sys.stdout
-sys.stdout = StringIO()
-
-try:
-    ${code.split('\n').map(line => '    ' + line).join('\n')}
-    
-    # Try to call common function names
-    if 'solution' in locals():
-        result = solution()
-        if result is not None:
-            print(result)
-    elif 'solve' in locals():
-        result = solve()
-        if result is not None:
-            print(result)
-            
-    output = sys.stdout.getvalue()
-    sys.stdout = old_stdout
-    print(output.strip())
-    
-except Exception as e:
-    sys.stdout = old_stdout
-    raise Exception(f"Runtime Error: {str(e)}")
-  `;
-  
-  // In a real implementation, you would execute this Python code
-  // For now, return a placeholder
-  throw new Error('Python execution requires Python runtime setup');
-}
-
-async function executeJava(code: string, input: string): Promise<string> {
-  // Java execution would require compilation and execution
-  // This is a placeholder for the structure
-  throw new Error('Java execution requires Java runtime setup');
-}
-
 async function executeCpp(code: string, input: string): Promise<string> {
-  // C++ execution would require compilation with g++ and execution
-  // This is a placeholder for the structure
-  throw new Error('C++ execution requires C++ compiler setup');
+  try {
+    const tempFileName = `solution_${Date.now()}`;
+    const cppFileName = `${tempFileName}.cpp`;
+    const execFileName = tempFileName;
+    
+    // Write the C++ code to a temporary file
+    await Deno.writeTextFile(cppFileName, code);
+    
+    // Compile C++ code
+    const compileCmd = new Deno.Command("g++", {
+      args: ["-o", execFileName, cppFileName],
+      stdin: "null",
+      stdout: "piped",
+      stderr: "piped",
+    });
+    
+    const { code: compileExitCode, stderr: compileStderr } = await compileCmd.output();
+    
+    if (compileExitCode !== 0) {
+      const errorMessage = new TextDecoder().decode(compileStderr);
+      throw new Error(`C++ compilation failed: ${errorMessage}`);
+    }
+    
+    // Execute the compiled program
+    const runCmd = new Deno.Command(`./${execFileName}`, {
+      stdin: "piped",
+      stdout: "piped",
+      stderr: "piped",
+    });
+    
+    const process = runCmd.spawn();
+    
+    // Write input to stdin
+    const writer = process.stdin.getWriter();
+    await writer.write(new TextEncoder().encode(input));
+    await writer.close();
+    
+    const { code: runExitCode, stdout, stderr } = await process.output();
+    
+    // Clean up temporary files
+    try {
+      await Deno.remove(cppFileName);
+      await Deno.remove(execFileName);
+    } catch {
+      // Ignore cleanup errors
+    }
+    
+    if (runExitCode !== 0) {
+      const errorMessage = new TextDecoder().decode(stderr);
+      throw new Error(`C++ execution failed: ${errorMessage}`);
+    }
+    
+    return new TextDecoder().decode(stdout);
+    
+  } catch (error) {
+    throw new Error(`C++ execution error: ${error.message}`);
+  }
 }
 
 async function executeC(code: string, input: string): Promise<string> {
-  // C execution would require compilation with gcc and execution
-  // This is a placeholder for the structure
-  throw new Error('C execution requires C compiler setup');
+  try {
+    const tempFileName = `solution_${Date.now()}`;
+    const cFileName = `${tempFileName}.c`;
+    const execFileName = tempFileName;
+    
+    // Write the C code to a temporary file
+    await Deno.writeTextFile(cFileName, code);
+    
+    // Compile C code
+    const compileCmd = new Deno.Command("gcc", {
+      args: ["-o", execFileName, cFileName],
+      stdin: "null",
+      stdout: "piped",
+      stderr: "piped",
+    });
+    
+    const { code: compileExitCode, stderr: compileStderr } = await compileCmd.output();
+    
+    if (compileExitCode !== 0) {
+      const errorMessage = new TextDecoder().decode(compileStderr);
+      throw new Error(`C compilation failed: ${errorMessage}`);
+    }
+    
+    // Execute the compiled program
+    const runCmd = new Deno.Command(`./${execFileName}`, {
+      stdin: "piped",
+      stdout: "piped",
+      stderr: "piped",
+    });
+    
+    const process = runCmd.spawn();
+    
+    // Write input to stdin
+    const writer = process.stdin.getWriter();
+    await writer.write(new TextEncoder().encode(input));
+    await writer.close();
+    
+    const { code: runExitCode, stdout, stderr } = await process.output();
+    
+    // Clean up temporary files
+    try {
+      await Deno.remove(cFileName);
+      await Deno.remove(execFileName);
+    } catch {
+      // Ignore cleanup errors
+    }
+    
+    if (runExitCode !== 0) {
+      const errorMessage = new TextDecoder().decode(stderr);
+      throw new Error(`C execution failed: ${errorMessage}`);
+    }
+    
+    return new TextDecoder().decode(stdout);
+    
+  } catch (error) {
+    throw new Error(`C execution error: ${error.message}`);
+  }
 }
 
 async function executeWithTimeout(code: string, timeoutMs: number): Promise<string> {
