@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -5,11 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { useCreateProblem, useCreateTestCase, useTestCases } from '@/hooks/useAdmin';
+import { useCreateProblem } from '@/hooks/useAdmin';
 import { useContestProblems } from '@/hooks/useContests';
-import { Plus, TestTube, Play, Eye, Trash2 } from 'lucide-react';
+import { Plus, ArrowLeft } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import EnhancedProblemView from '../EnhancedProblemView';
+import ProblemCard from './ProblemCard';
 
 interface ProblemManagerProps {
   contestId: string;
@@ -17,7 +19,6 @@ interface ProblemManagerProps {
 
 const ProblemManager = ({ contestId }: ProblemManagerProps) => {
   const [showProblemForm, setShowProblemForm] = useState(false);
-  const [showTestCaseForm, setShowTestCaseForm] = useState<string | null>(null);
   const [previewProblem, setPreviewProblem] = useState<string | null>(null);
   const [problemForm, setProblemForm] = useState({
     title: '',
@@ -29,56 +30,72 @@ const ProblemManager = ({ contestId }: ProblemManagerProps) => {
     sample_input: '',
     sample_output: '',
   });
-  const [testCaseForm, setTestCaseForm] = useState({
-    input_data: '',
-    expected_output: '',
-    is_sample: false,
-    points: 0,
-  });
 
-  const { data: problems } = useContestProblems(contestId);
+  const { data: problems, isLoading } = useContestProblems(contestId);
   const createProblem = useCreateProblem();
-  const createTestCase = useCreateTestCase();
+  const { toast } = useToast();
 
-  const handleCreateProblem = (e: React.FormEvent) => {
+  const handleCreateProblem = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!problemForm.title.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Problem title is required.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!problemForm.description.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Problem description is required.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (problemForm.points <= 0) {
+      toast({
+        title: "Validation Error",
+        description: "Points must be greater than 0.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     const problemOrder = (problems?.length || 0) + 1;
     
-    createProblem.mutate({
-      contest_id: contestId,
-      problem_order: problemOrder,
-      ...problemForm,
-    });
-    
-    setProblemForm({
-      title: '',
-      description: '',
-      difficulty: 'Easy',
-      points: 100,
-      time_limit_seconds: 5,
-      memory_limit_mb: 256,
-      sample_input: '',
-      sample_output: '',
-    });
-    setShowProblemForm(false);
-  };
-
-  const handleCreateTestCase = (e: React.FormEvent, problemId: string) => {
-    e.preventDefault();
-    
-    createTestCase.mutate({
-      problem_id: problemId,
-      ...testCaseForm,
-    });
-    
-    setTestCaseForm({
-      input_data: '',
-      expected_output: '',
-      is_sample: false,
-      points: 0,
-    });
-    setShowTestCaseForm(null);
+    try {
+      await createProblem.mutateAsync({
+        contest_id: contestId,
+        problem_order: problemOrder,
+        title: problemForm.title.trim(),
+        description: problemForm.description.trim(),
+        difficulty: problemForm.difficulty,
+        points: problemForm.points,
+        time_limit_seconds: problemForm.time_limit_seconds,
+        memory_limit_mb: problemForm.memory_limit_mb,
+        sample_input: problemForm.sample_input.trim() || undefined,
+        sample_output: problemForm.sample_output.trim() || undefined,
+      });
+      
+      // Reset form on success
+      setProblemForm({
+        title: '',
+        description: '',
+        difficulty: 'Easy',
+        points: 100,
+        time_limit_seconds: 5,
+        memory_limit_mb: 256,
+        sample_input: '',
+        sample_output: '',
+      });
+      setShowProblemForm(false);
+    } catch (error) {
+      console.error('Problem creation failed:', error);
+    }
   };
 
   // If preview mode is active, show the enhanced problem view
@@ -91,9 +108,10 @@ const ProblemManager = ({ contestId }: ProblemManagerProps) => {
             <Button
               onClick={() => setPreviewProblem(null)}
               variant="outline"
-              className="border-slate-600 text-slate-300"
+              className="border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700"
             >
-              ← Back to Problem Manager
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Problem Manager
             </Button>
           </div>
           <EnhancedProblemView
@@ -105,16 +123,29 @@ const ProblemManager = ({ contestId }: ProblemManagerProps) => {
     }
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="text-slate-300">Loading problems...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">Problem Management</h3>
+        <div>
+          <h3 className="text-lg font-semibold text-white">Problem Management</h3>
+          <p className="text-slate-400 text-sm">
+            {problems?.length || 0} problem{(problems?.length || 0) !== 1 ? 's' : ''} created
+          </p>
+        </div>
         <Button
-          onClick={() => setShowProblemForm(true)}
+          onClick={() => setShowProblemForm(!showProblemForm)}
           className="bg-green-600 hover:bg-green-700"
         >
           <Plus className="h-4 w-4 mr-2" />
-          Add Problem
+          {showProblemForm ? 'Cancel' : 'Add Problem'}
         </Button>
       </div>
 
@@ -125,14 +156,15 @@ const ProblemManager = ({ contestId }: ProblemManagerProps) => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreateProblem} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-slate-300">Title</Label>
+                  <Label className="text-slate-300">Title *</Label>
                   <Input
                     value={problemForm.title}
                     onChange={(e) => setProblemForm(prev => ({ ...prev, title: e.target.value }))}
                     required
-                    className="bg-slate-700 border-slate-600 text-white"
+                    placeholder="Enter problem title"
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                   />
                 </div>
                 <div>
@@ -151,24 +183,26 @@ const ProblemManager = ({ contestId }: ProblemManagerProps) => {
               </div>
 
               <div>
-                <Label className="text-slate-300">Description</Label>
+                <Label className="text-slate-300">Description *</Label>
                 <Textarea
                   value={problemForm.description}
                   onChange={(e) => setProblemForm(prev => ({ ...prev, description: e.target.value }))}
                   required
                   rows={4}
-                  className="bg-slate-700 border-slate-600 text-white"
+                  placeholder="Enter detailed problem description"
+                  className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <Label className="text-slate-300">Points</Label>
+                  <Label className="text-slate-300">Points *</Label>
                   <Input
                     type="number"
                     value={problemForm.points}
-                    onChange={(e) => setProblemForm(prev => ({ ...prev, points: parseInt(e.target.value) }))}
+                    onChange={(e) => setProblemForm(prev => ({ ...prev, points: parseInt(e.target.value) || 0 }))}
                     min="1"
+                    required
                     className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
@@ -177,7 +211,7 @@ const ProblemManager = ({ contestId }: ProblemManagerProps) => {
                   <Input
                     type="number"
                     value={problemForm.time_limit_seconds}
-                    onChange={(e) => setProblemForm(prev => ({ ...prev, time_limit_seconds: parseInt(e.target.value) }))}
+                    onChange={(e) => setProblemForm(prev => ({ ...prev, time_limit_seconds: parseInt(e.target.value) || 1 }))}
                     min="1"
                     className="bg-slate-700 border-slate-600 text-white"
                   />
@@ -187,21 +221,22 @@ const ProblemManager = ({ contestId }: ProblemManagerProps) => {
                   <Input
                     type="number"
                     value={problemForm.memory_limit_mb}
-                    onChange={(e) => setProblemForm(prev => ({ ...prev, memory_limit_mb: parseInt(e.target.value) }))}
+                    onChange={(e) => setProblemForm(prev => ({ ...prev, memory_limit_mb: parseInt(e.target.value) || 1 }))}
                     min="1"
                     className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label className="text-slate-300">Sample Input</Label>
                   <Textarea
                     value={problemForm.sample_input}
                     onChange={(e) => setProblemForm(prev => ({ ...prev, sample_input: e.target.value }))}
                     rows={3}
-                    className="bg-slate-700 border-slate-600 text-white"
+                    placeholder="Optional sample input"
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                   />
                 </div>
                 <div>
@@ -210,20 +245,25 @@ const ProblemManager = ({ contestId }: ProblemManagerProps) => {
                     value={problemForm.sample_output}
                     onChange={(e) => setProblemForm(prev => ({ ...prev, sample_output: e.target.value }))}
                     rows={3}
-                    className="bg-slate-700 border-slate-600 text-white"
+                    placeholder="Optional sample output"
+                    className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
                   />
                 </div>
               </div>
 
               <div className="flex space-x-2">
-                <Button type="submit" disabled={createProblem.isPending}>
+                <Button 
+                  type="submit" 
+                  disabled={createProblem.isPending}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
                   {createProblem.isPending ? 'Creating...' : 'Create Problem'}
                 </Button>
                 <Button 
                   type="button" 
                   variant="outline" 
                   onClick={() => setShowProblemForm(false)}
-                  className="border-slate-600 text-slate-300"
+                  className="border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700"
                 >
                   Cancel
                 </Button>
@@ -234,150 +274,27 @@ const ProblemManager = ({ contestId }: ProblemManagerProps) => {
       )}
 
       <div className="space-y-4">
-        {problems?.map((problem) => (
-          <ProblemCard 
-            key={problem.id}
-            problem={problem}
-            onAddTestCase={() => setShowTestCaseForm(problem.id)}
-            onPreview={() => setPreviewProblem(problem.id)}
-            showTestCaseForm={showTestCaseForm === problem.id}
-            onSubmitTestCase={(e) => handleCreateTestCase(e, problem.id)}
-            testCaseForm={testCaseForm}
-            setTestCaseForm={setTestCaseForm}
-            createTestCase={createTestCase}
-          />
-        ))}
+        {problems && problems.length > 0 ? (
+          problems.map((problem) => (
+            <ProblemCard 
+              key={problem.id}
+              problem={problem}
+              onPreview={() => setPreviewProblem(problem.id)}
+            />
+          ))
+        ) : (
+          <Card className="bg-slate-800 border-slate-700">
+            <CardContent className="p-8 text-center">
+              <div className="text-slate-400">
+                <Plus className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="text-lg mb-2">No problems created yet</p>
+                <p className="text-sm">Click "Add Problem" to create your first problem</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
-  );
-};
-
-const ProblemCard = ({ 
-  problem, 
-  onAddTestCase, 
-  onPreview,
-  showTestCaseForm, 
-  onSubmitTestCase, 
-  testCaseForm, 
-  setTestCaseForm,
-  createTestCase 
-}: any) => {
-  const { data: testCases } = useTestCases(problem.id);
-
-  return (
-    <Card className="bg-slate-800 border-slate-700">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-white">{problem.title}</CardTitle>
-            <div className="flex items-center space-x-2 mt-2">
-              <Badge className={`${
-                problem.difficulty === 'Easy' ? 'bg-green-600' :
-                problem.difficulty === 'Medium' ? 'bg-yellow-600' :
-                'bg-red-600'
-              }`}>
-                {problem.difficulty}
-              </Badge>
-              <Badge variant="outline" className="text-slate-300 border-slate-600">
-                {problem.points} pts
-              </Badge>
-              <Badge variant="outline" className="text-slate-300 border-slate-600">
-                {testCases?.length || 0} test cases
-              </Badge>
-              <Badge variant="outline" className="text-slate-300 border-slate-600">
-                {problem.time_limit_seconds}s / {problem.memory_limit_mb}MB
-              </Badge>
-            </div>
-          </div>
-          <div className="flex space-x-2">
-            <Button
-              onClick={onPreview}
-              size="sm"
-              variant="outline"
-              className="border-slate-600 text-slate-300"
-            >
-              <Eye className="h-4 w-4 mr-2" />
-              Preview
-            </Button>
-            <Button
-              onClick={onAddTestCase}
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              <TestTube className="h-4 w-4 mr-2" />
-              Add Test Case
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      
-      {showTestCaseForm && (
-        <CardContent className="border-t border-slate-700">
-          <form onSubmit={onSubmitTestCase} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-slate-300">Input Data</Label>
-                <Textarea
-                  value={testCaseForm.input_data}
-                  onChange={(e) => setTestCaseForm(prev => ({ ...prev, input_data: e.target.value }))}
-                  required
-                  rows={3}
-                  className="bg-slate-700 border-slate-600 text-white"
-                />
-              </div>
-              <div>
-                <Label className="text-slate-300">Expected Output</Label>
-                <Textarea
-                  value={testCaseForm.expected_output}
-                  onChange={(e) => setTestCaseForm(prev => ({ ...prev, expected_output: e.target.value }))}
-                  required
-                  rows={3}
-                  className="bg-slate-700 border-slate-600 text-white"
-                />
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <label className="flex items-center space-x-2 text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={testCaseForm.is_sample}
-                  onChange={(e) => setTestCaseForm(prev => ({ ...prev, is_sample: e.target.checked }))}
-                  className="rounded"
-                />
-                <span>Sample Test Case</span>
-              </label>
-              
-              <div>
-                <Label className="text-slate-300">Points</Label>
-                <Input
-                  type="number"
-                  value={testCaseForm.points}
-                  onChange={(e) => setTestCaseForm(prev => ({ ...prev, points: parseInt(e.target.value) || 0 }))}
-                  min="0"
-                  className="bg-slate-700 border-slate-600 text-white w-20"
-                />
-              </div>
-            </div>
-
-            <div className="flex space-x-2">
-              <Button type="submit" size="sm" disabled={createTestCase.isPending}>
-                {createTestCase.isPending ? 'Adding...' : 'Add Test Case'}
-              </Button>
-              <Button 
-                type="button" 
-                variant="outline" 
-                size="sm"
-                onClick={() => setTestCaseForm({ input_data: '', expected_output: '', is_sample: false, points: 0 })}
-                className="border-slate-600 text-slate-300"
-              >
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      )}
-    </Card>
   );
 };
 
