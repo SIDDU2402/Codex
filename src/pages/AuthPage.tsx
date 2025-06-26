@@ -40,43 +40,57 @@ const AuthPage = () => {
             title: "Welcome back!",
             description: "You have successfully signed in.",
           });
+          
           // Fetch user role after login
           try {
             const { data: { session } } = await supabase.auth.getSession();
             const userId = session?.user?.id;
+            
             if (!userId) {
               navigate('/');
               return;
             }
+            
             const { data: profile, error: profileError } = await supabase
               .from('profiles')
               .select('role')
               .eq('id', userId)
               .single();
+              
             if (profileError) {
+              console.error('Profile fetch error:', profileError);
               navigate('/');
             } else if (profile?.role === 'admin') {
               navigate('/admin');
             } else {
               navigate('/');
             }
-          } catch (e) {
-            const { data, error: profileError } = await supabase
-              .from('profiles')
-              .select('role')
-              .eq('email', email)
-              .single();
-            if (profileError) {
-              console.error('Supabase profile fetch error:', profileError);
-              toast({
-                title: "Profile Error",
-                description: profileError.message || "Could not fetch user profile.",
-                variant: "destructive",
-              });
-              navigate('/');
-            } else if (data?.role === 'admin') {
-              navigate('/admin');
-            } else {
+          } catch (profileFetchError) {
+            console.error('Error fetching profile:', profileFetchError);
+            
+            // Fallback: try to fetch by email
+            try {
+              const { data, error: emailProfileError } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('email', email)
+                .single();
+                
+              if (emailProfileError) {
+                console.error('Email profile fetch error:', emailProfileError);
+                toast({
+                  title: "Profile Error",
+                  description: "Could not fetch user profile.",
+                  variant: "destructive",
+                });
+                navigate('/');
+              } else if (data?.role === 'admin') {
+                navigate('/admin');
+              } else {
+                navigate('/');
+              }
+            } catch (fallbackError) {
+              console.error('Fallback profile fetch error:', fallbackError);
               navigate('/');
             }
           }
@@ -97,6 +111,7 @@ const AuthPage = () => {
         }
       }
     } catch (error) {
+      console.error('Authentication error:', error);
       toast({
         title: "Error",
         description: "An unexpected error occurred. Please try again.",
