@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -22,6 +21,64 @@ const AuthPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  const fetchUserProfile = async (userId: string, fallbackEmail?: string) => {
+    try {
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single();
+        
+      if (profileError && fallbackEmail) {
+        // Try fallback with email
+        const { data: emailProfile, error: emailError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('email', fallbackEmail)
+          .single();
+          
+        if (emailError) {
+          console.error('Profile fetch error:', emailError);
+          return null;
+        }
+        return emailProfile;
+      }
+      
+      if (profileError) {
+        console.error('Profile fetch error:', profileError);
+        return null;
+      }
+      
+      return profile;
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+      return null;
+    }
+  };
+
+  const handleSuccessfulLogin = async () => {
+    toast({
+      title: "Welcome back!",
+      description: "You have successfully signed in.",
+    });
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    
+    if (!userId) {
+      navigate('/');
+      return;
+    }
+    
+    const profile = await fetchUserProfile(userId, email);
+    
+    if (profile?.role === 'admin') {
+      navigate('/admin');
+    } else {
+      navigate('/');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -36,64 +93,7 @@ const AuthPage = () => {
             variant: "destructive",
           });
         } else {
-          toast({
-            title: "Welcome back!",
-            description: "You have successfully signed in.",
-          });
-          
-          // Fetch user role after login
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const userId = session?.user?.id;
-            
-            if (!userId) {
-              navigate('/');
-              return;
-            }
-            
-            const { data: profile, error: profileError } = await supabase
-              .from('profiles')
-              .select('role')
-              .eq('id', userId)
-              .single();
-              
-            if (profileError) {
-              console.error('Profile fetch error:', profileError);
-              navigate('/');
-            } else if (profile?.role === 'admin') {
-              navigate('/admin');
-            } else {
-              navigate('/');
-            }
-          } catch (profileFetchError) {
-            console.error('Error fetching profile:', profileFetchError);
-            
-            // Fallback: try to fetch by email
-            try {
-              const { data, error: emailProfileError } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('email', email)
-                .single();
-                
-              if (emailProfileError) {
-                console.error('Email profile fetch error:', emailProfileError);
-                toast({
-                  title: "Profile Error",
-                  description: "Could not fetch user profile.",
-                  variant: "destructive",
-                });
-                navigate('/');
-              } else if (data?.role === 'admin') {
-                navigate('/admin');
-              } else {
-                navigate('/');
-              }
-            } catch (fallbackError) {
-              console.error('Fallback profile fetch error:', fallbackError);
-              navigate('/');
-            }
-          }
+          await handleSuccessfulLogin();
         }
       } else {
         const { error } = await signUp(email, password, fullName, username);
