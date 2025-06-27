@@ -25,6 +25,8 @@ const CreateContestForm = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('Form submission started with data:', formData);
+    
     // Validation
     if (!formData.title.trim()) {
       toast({
@@ -74,14 +76,15 @@ const CreateContestForm = () => {
       start_time: startTime.toISOString(),
       end_time: endTime.toISOString(),
       duration_minutes: formData.duration_minutes,
-      max_participants: formData.max_participants ? parseInt(formData.max_participants) : null,
+      max_participants: formData.max_participants || null,
       status: 'upcoming' as const,
     };
 
-    console.log('Creating contest with data:', contestData);
+    console.log('Submitting contest with data:', contestData);
 
     try {
-      await createContest.mutateAsync(contestData);
+      const result = await createContest.mutateAsync(contestData);
+      console.log('Contest creation result:', result);
       
       toast({
         title: "Success",
@@ -97,14 +100,11 @@ const CreateContestForm = () => {
         max_participants: '',
       });
       
-      // Refresh the contest list
-      queryClient.invalidateQueries({ queryKey: ['admin-contests'] });
-      queryClient.invalidateQueries({ queryKey: ['contests'] });
     } catch (error) {
       console.error('Contest creation failed:', error);
       toast({
         title: "Error",
-        description: "Failed to create contest. Please try again.",
+        description: `Failed to create contest: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive",
       });
     }

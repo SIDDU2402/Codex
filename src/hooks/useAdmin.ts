@@ -32,35 +32,44 @@ export const useCreateContest = () => {
     mutationFn: async (contestData: any) => {
       if (!user) throw new Error('Must be logged in to create contest');
 
-      console.log('Inserting contest data:', contestData);
+      console.log('User ID:', user.id);
+      console.log('Raw contest data:', contestData);
+
+      // Ensure all required fields are present and properly typed
+      const insertData = {
+        title: contestData.title,
+        description: contestData.description,
+        start_time: contestData.start_time,
+        end_time: contestData.end_time,
+        duration_minutes: parseInt(contestData.duration_minutes),
+        max_participants: contestData.max_participants ? parseInt(contestData.max_participants) : null,
+        status: contestData.status || 'upcoming',
+        created_by: user.id,
+      };
+
+      console.log('Processed insert data:', insertData);
 
       const { data, error } = await supabase
         .from('contests')
-        .insert({
-          title: contestData.title,
-          description: contestData.description,
-          start_time: contestData.start_time,
-          end_time: contestData.end_time,
-          duration_minutes: contestData.duration_minutes,
-          max_participants: contestData.max_participants,
-          status: contestData.status || 'upcoming',
-          created_by: user.id,
-        })
+        .insert(insertData)
         .select()
         .single();
 
       if (error) {
-        console.error('Contest creation error:', error);
+        console.error('Supabase error details:', error);
         throw error;
       }
+
+      console.log('Contest created successfully:', data);
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['admin-contests'] });
-      console.log('Contest created successfully');
+      queryClient.invalidateQueries({ queryKey: ['contests'] });
+      console.log('Contest creation mutation succeeded:', data);
     },
     onError: (error: any) => {
-      console.error('Contest creation error:', error);
+      console.error('Contest creation mutation failed:', error);
     },
   });
 };
