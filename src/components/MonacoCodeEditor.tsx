@@ -1,4 +1,3 @@
-
 import { useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { Button } from '@/components/ui/button';
@@ -29,12 +28,14 @@ const MonacoCodeEditor = ({ problemId, contestId, onSubmit, testCases }: MonacoC
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState('python');
   const [isRunning, setIsRunning] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [testResults, setTestResults] = useState<Array<{
     passed: boolean;
     input: string;
     expected: string;
     actual: string;
     error?: string;
+    compilation_error?: string;
   }>>([]);
 
   const submitCode = useSubmitCode();
@@ -167,80 +168,7 @@ if (result !== undefined && result !== null) {
     });
   };
 
-  const executePython = async (code: string, input: string): Promise<{ output: string; error?: string }> => {
-    try {
-      // Simulate Python execution - in a real environment, this would use a Python interpreter
-      // For demo purposes, we'll do basic string processing
-      const lines = input.trim().split('\n');
-      
-      // Simple pattern matching for common operations
-      if (code.includes('input().strip()') && code.includes('return')) {
-        // Basic echo functionality for demonstration
-        return { output: lines[0] || '' };
-      }
-      
-      // For more complex operations, we'd need actual Python execution
-      return { output: 'Python execution requires server-side processing', error: 'Local execution not available for Python' };
-    } catch (error) {
-      return { output: '', error: error instanceof Error ? error.message : 'Python execution error' };
-    }
-  };
-
-  const executeJava = async (code: string, input: string): Promise<{ output: string; error?: string }> => {
-    try {
-      // Simulate Java execution - in a real environment, this would compile and run Java code
-      const lines = input.trim().split('\n');
-      
-      // Basic pattern matching for simple operations
-      if (code.includes('scanner.nextLine()') && code.includes('System.out.println')) {
-        // Basic echo functionality for demonstration
-        return { output: lines[0] || '' };
-      }
-      
-      return { output: 'Java execution requires server-side compilation', error: 'Local execution not available for Java' };
-    } catch (error) {
-      return { output: '', error: error instanceof Error ? error.message : 'Java execution error' };
-    }
-  };
-
-  const executeJavaScript = async (code: string, input: string): Promise<{ output: string; error?: string }> => {
-    try {
-      const wrappedCode = `
-        const inputData = ${JSON.stringify(input)};
-        const inputLines = inputData.trim().split('\\n');
-        let currentLineIndex = 0;
-        
-        function readline() {
-          if (currentLineIndex < inputLines.length) {
-            return inputLines[currentLineIndex++];
-          }
-          return '';
-        }
-        
-        let output = '';
-        const originalConsoleLog = console.log;
-        console.log = (...args) => {
-          output += args.join(' ') + '\\n';
-        };
-        
-        try {
-          ${code}
-          console.log = originalConsoleLog;
-          return output.trim();
-        } catch (error) {
-          console.log = originalConsoleLog;
-          throw new Error('Runtime Error: ' + error.message);
-        }
-      `;
-      
-      const func = new Function(wrappedCode);
-      const result = func();
-      return { output: result || '' };
-    } catch (error) {
-      return { output: '', error: error instanceof Error ? error.message : 'Execution error' };
-    }
-  };
-
+  // Immediate compilation and execution for sample test cases
   const handleRun = async () => {
     if (!testCases || testCases.length === 0) {
       toast.error('No test cases available for this problem');
@@ -250,49 +178,56 @@ if (result !== undefined && result !== null) {
     setIsRunning(true);
     setTestResults([]);
 
-    const results = [];
-    const sampleTestCases = testCases.filter(tc => tc.is_sample);
-    const casesToTest = sampleTestCases.length > 0 ? sampleTestCases : testCases.slice(0, 3);
-
-    for (const testCase of casesToTest) {
-      let result;
+    try {
+      // Get only sample test cases for immediate testing
+      const sampleTestCases = testCases.filter(tc => tc.is_sample);
       
-      switch (language) {
-        case 'python':
-          result = await executePython(code, testCase.input_data);
-          break;
-        case 'java':
-          result = await executeJava(code, testCase.input_data);
-          break;
-        case 'javascript':
-          result = await executeJavaScript(code, testCase.input_data);
-          break;
-        default:
-          result = { output: '', error: `${language} execution not supported in preview mode` };
+      if (sampleTestCases.length === 0) {
+        toast.error('No sample test cases available for testing');
+        setIsRunning(false);
+        return;
       }
-      
-      const passed = result.output.trim() === testCase.expected_output.trim() && !result.error;
-      
-      results.push({
-        passed,
-        input: testCase.input_data,
-        expected: testCase.expected_output,
-        actual: result.output,
-        error: result.error
+
+      // Call the compilation and execution endpoint
+      const response = await fetch('/api/compile-and-run', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          language,
+          testCases: sampleTestCases
+        })
       });
-    }
 
-    setTestResults(results);
-    setIsRunning(false);
+      if (!response.ok) {
+        throw new Error('Failed to compile and run code');
+      }
 
-    const passedCount = results.filter(r => r.passed).length;
-    if (passedCount === results.length) {
-      toast.success(`All ${passedCount} test cases passed!`);
-    } else {
-      toast.error(`${passedCount}/${results.length} test cases passed`);
+      const results = await response.json();
+      setTestResults(results.testResults);
+
+      const passedCount = results.testResults.filter((r: any) => r.passed).length;
+      if (passedCount === results.testResults.length) {
+        toast.success(`All ${passedCount} sample test cases passed!`);
+      } else {
+        toast.error(`${passedCount}/${results.testResults.length} sample test cases passed`);
+      }
+
+      if (results.compilation_error) {
+        toast.error('Compilation Error: ' + results.compilation_error);
+      }
+
+    } catch (error) {
+      console.error('Run error:', error);
+      toast.error('Failed to run code. Please try again.');
+    } finally {
+      setIsRunning(false);
     }
   };
 
+  // Full evaluation with hidden test cases
   const handleSubmit = async () => {
     if (!problemId || !contestId) {
       toast.error("Problem ID and Contest ID are required for submission");
@@ -304,7 +239,10 @@ if (result !== undefined && result !== null) {
       return;
     }
 
+    setIsSubmitting(true);
+
     try {
+      // First submit the code
       const submission = await submitCode.mutateAsync({
         problemId,
         contestId,
@@ -313,14 +251,32 @@ if (result !== undefined && result !== null) {
       });
       
       if (submission?.id) {
-        await evaluateSubmission.mutateAsync(submission.id);
-        toast.success("Code submitted and evaluation started!");
+        // Then evaluate with all test cases (including hidden ones)
+        const evaluationResult = await evaluateSubmission.mutateAsync(submission.id);
+        
+        if (evaluationResult.success) {
+          toast.success(`Submission completed! Score: ${evaluationResult.score}/${evaluationResult.totalPoints || 'N/A'}`);
+          
+          // Show detailed results
+          const passedCount = evaluationResult.passedTestCases || 0;
+          const totalCount = evaluationResult.totalTestCases || 0;
+          
+          if (passedCount === totalCount) {
+            toast.success(`Perfect! All ${totalCount} test cases passed!`);
+          } else {
+            toast.info(`${passedCount}/${totalCount} test cases passed`);
+          }
+        } else {
+          toast.error('Evaluation failed: ' + evaluationResult.error);
+        }
       }
       
       onSubmit?.();
     } catch (error) {
       console.error("Submission failed:", error);
       toast.error("Failed to submit code. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -353,42 +309,41 @@ if (result !== undefined && result !== null) {
               {isRunning ? (
                 <>
                   <Loader className="h-4 w-4 mr-2 animate-spin" />
-                  Running...
+                  Compiling...
                 </>
               ) : (
                 <>
                   <Play className="h-4 w-4 mr-2" />
-                  Run
+                  Run (Sample)
                 </>
               )}
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={submitCode.isPending || !problemId || !contestId}
+              disabled={isSubmitting || !problemId || !contestId}
               className="bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600"
             >
-              {submitCode.isPending ? (
+              {isSubmitting ? (
                 <>
                   <Clock className="h-4 w-4 mr-2 animate-spin" />
-                  Submitting...
+                  Evaluating...
                 </>
               ) : (
                 <>
                   <Send className="h-4 w-4 mr-2" />
-                  Submit
+                  Submit (All Tests)
                 </>
               )}
             </Button>
           </div>
         </div>
-        {(language === 'python' || language === 'java') && (
-          <div className="mt-2 p-2 bg-blue-900/20 border border-blue-700 rounded">
-            <p className="text-blue-300 text-sm">
-              <strong>Note:</strong> {language === 'python' ? 'Python' : 'Java'} code will be executed on the server when you submit. 
-              Local testing shows simulated results for preview purposes.
-            </p>
-          </div>
-        )}
+        <div className="mt-2 p-2 bg-blue-900/20 border border-blue-700 rounded">
+          <p className="text-blue-300 text-sm">
+            <strong>Run:</strong> Tests your code against sample test cases with immediate compilation feedback.
+            <br />
+            <strong>Submit:</strong> Full evaluation against all test cases (including hidden ones) for final scoring.
+          </p>
+        </div>
       </div>
 
       <div className="flex-1 min-h-0">
@@ -424,7 +379,7 @@ if (result !== undefined && result !== null) {
           <Card className="bg-slate-900 border-slate-700">
             <CardHeader className="pb-2">
               <CardTitle className="text-white text-sm flex items-center">
-                Test Results (Preview Mode)
+                Sample Test Results
                 <Badge className={`ml-2 ${testResults.every(r => r.passed) ? 'bg-green-600' : 'bg-red-600'} text-white text-xs`}>
                   {testResults.filter(r => r.passed).length}/{testResults.length} Passed
                 </Badge>
@@ -440,7 +395,7 @@ if (result !== undefined && result !== null) {
                       <XCircle className="h-4 w-4 text-red-500 mr-2" />
                     )}
                     <span className="text-white text-sm font-medium">
-                      Test Case {index + 1}
+                      Sample Test Case {index + 1}
                     </span>
                   </div>
                   <div className="space-y-2 text-xs">
@@ -458,9 +413,15 @@ if (result !== undefined && result !== null) {
                         {result.actual || 'No output'}
                       </span>
                     </div>
+                    {result.compilation_error && (
+                      <div>
+                        <span className="text-slate-400">Compilation Error: </span>
+                        <span className="text-red-400 font-mono">{result.compilation_error}</span>
+                      </div>
+                    )}
                     {result.error && (
                       <div>
-                        <span className="text-slate-400">Error: </span>
+                        <span className="text-slate-400">Runtime Error: </span>
                         <span className="text-red-400 font-mono">{result.error}</span>
                       </div>
                     )}

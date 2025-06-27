@@ -1,242 +1,202 @@
-
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useAdminContests, useContestLeaderboard } from '@/hooks/useContests';
-import { useUpdateContestStatus } from '@/hooks/useAdmin';
-import { Play, Pause, Square, Users, Trophy, Clock } from 'lucide-react';
+import { Plus, Search, Calendar, Users, Trophy, Settings } from 'lucide-react';
+import { useAdminContests, useUpdateContestStatus } from '@/hooks/useContests';
 import CreateContestForm from './CreateContestForm';
 import ContestProblemManager from './ContestProblemManager';
+import ContestStatsManager from './ContestStatsManager';
 
 const ContestDashboard = () => {
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const [selectedContest, setSelectedContest] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
-  const { data: contests, isLoading, refetch } = useAdminContests();
+
+  const { data: contests, isLoading, error } = useAdminContests();
   const updateContestStatus = useUpdateContestStatus();
 
-  const handleStatusUpdate = (contestId: string, status: string) => {
-    updateContestStatus.mutate({ contestId, status }, {
-      onSuccess: () => {
-        refetch();
-      }
-    });
+  const filteredContests = contests?.filter(contest =>
+    contest.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    contest.description.toLowerCase().includes(searchTerm.toLowerCase())
+  ) || [];
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'bg-green-600';
+      case 'upcoming':
+        return 'bg-blue-600';
+      case 'completed':
+        return 'bg-gray-600';
+      case 'cancelled':
+        return 'bg-red-600';
+      default:
+        return 'bg-gray-600';
+    }
   };
 
-  const handleContestSelect = (contestId: string) => {
-    setSelectedContest(contestId);
-    setActiveTab('manage');
+  const handleStatusChange = async (contestId: string, newStatus: string) => {
+    try {
+      await updateContestStatus.mutateAsync({ contestId, status: newStatus });
+    } catch (error) {
+      console.error('Failed to update contest status:', error);
+    }
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-900 p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center text-white">Loading contests...</div>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center">
+        <div className="text-white text-lg">Loading contests...</div>
       </div>
     );
   }
 
-  const activeContests = contests?.filter(c => c.status === 'active') || [];
-  const draftContests = contests?.filter(c => c.status === 'draft') || [];
-  const endedContests = contests?.filter(c => c.status === 'ended') || [];
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center">
+        <div className="text-red-400 text-lg">Error loading contests</div>
+      </div>
+    );
+  }
+
   const selectedContestData = contests?.find(c => c.id === selectedContest);
 
   return (
-    <div className="min-h-screen bg-slate-900 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-6">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Contest Administration</h1>
-          <p className="text-slate-400">Create and manage coding contests</p>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-white mb-2">Contest Management</h1>
+            <p className="text-slate-300">Manage your programming contests and competitions</p>
+          </div>
+          <Button
+            onClick={() => setShowCreateForm(true)}
+            className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Contest
+          </Button>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-slate-800 border-slate-700">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-slate-700">Overview</TabsTrigger>
-            <TabsTrigger value="create" className="data-[state=active]:bg-slate-700">Create Contest</TabsTrigger>
-            <TabsTrigger value="manage" className="data-[state=active]:bg-slate-700">
-              Manage Problems
-              {selectedContestData && (
-                <span className="ml-2 text-xs bg-blue-600 px-2 py-1 rounded">
+        {selectedContest && selectedContestData ? (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <Button
+                  onClick={() => setSelectedContest(null)}
+                  variant="outline"
+                  className="border-slate-600 text-slate-300 hover:text-white mr-4"
+                >
+                  ← Back to All Contests
+                </Button>
+                <h2 className="text-2xl font-bold text-white inline-block">
                   {selectedContestData.title}
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-lg flex items-center">
-                    <Play className="h-5 w-5 mr-2 text-green-500" />
-                    Active Contests
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-green-500">{activeContests.length}</div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-lg flex items-center">
-                    <Clock className="h-5 w-5 mr-2 text-yellow-500" />
-                    Draft Contests
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-yellow-500">{draftContests.length}</div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-white text-lg flex items-center">
-                    <Square className="h-5 w-5 mr-2 text-red-500" />
-                    Ended Contests
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-red-500">{endedContests.length}</div>
-                </CardContent>
-              </Card>
+                </h2>
+              </div>
+              <TabsList className="bg-slate-800 border-slate-700">
+                <TabsTrigger value="overview" className="text-slate-300 data-[state=active]:text-white">
+                  <Trophy className="h-4 w-4 mr-2" />
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger value="problems" className="text-slate-300 data-[state=active]:text-white">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Problems
+                </TabsTrigger>
+              </TabsList>
             </div>
 
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-white">All Contests</h2>
-              {contests && contests.length > 0 ? (
-                contests.map((contest) => (
-                  <ContestCard 
-                    key={contest.id}
-                    contest={contest}
-                    onStatusUpdate={handleStatusUpdate}
-                    onSelect={() => handleContestSelect(contest.id)}
-                    isSelected={selectedContest === contest.id}
+            <TabsContent value="overview" className="space-y-6">
+              <ContestStatsManager contest={selectedContestData} />
+            </TabsContent>
+
+            <TabsContent value="problems" className="space-y-6">
+              <ContestProblemManager contestId={selectedContest} />
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <>
+            <div className="mb-6">
+              <div className="flex items-center space-x-4">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+                  <Input
+                    placeholder="Search contests..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 bg-slate-800 border-slate-700 text-white placeholder-slate-400"
                   />
-                ))
-              ) : (
-                <Card className="bg-slate-800 border-slate-700">
-                  <CardContent className="p-6 text-center">
-                    <p className="text-slate-400">No contests created yet</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredContests.map((contest) => (
+                <Card key={contest.id} className="bg-slate-800/50 border-slate-700 hover:bg-slate-800/70 transition-colors cursor-pointer"
+                      onClick={() => setSelectedContest(contest.id)}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-white text-lg">{contest.title}</CardTitle>
+                      <Badge className={`${getStatusColor(contest.status)} text-white`}>
+                        {contest.status.toUpperCase()}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-slate-300 mb-4 line-clamp-2">{contest.description}</p>
+                    
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center text-slate-400">
+                        <Calendar className="h-4 w-4 mr-2" />
+                        <span>
+                          {new Date(contest.start_date).toLocaleDateString()} - {new Date(contest.end_date).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="flex items-center text-slate-400">
+                        <Users className="h-4 w-4 mr-2" />
+                        <span>Created {new Date(contest.created_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2 mt-4">
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStatusChange(contest.id, contest.status === 'active' ? 'completed' : 'active');
+                        }}
+                        variant="outline"
+                        size="sm"
+                        className="border-slate-600 text-slate-300 hover:text-white"
+                        disabled={updateContestStatus.isPending}
+                      >
+                        {contest.status === 'active' ? 'End Contest' : 'Activate'}
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
-              )}
+              ))}
             </div>
-          </TabsContent>
 
-          <TabsContent value="create">
-            <CreateContestForm />
-          </TabsContent>
-
-          <TabsContent value="manage">
-            {selectedContest ? (
-              <ContestProblemManager 
-                contestId={selectedContest} 
-                contestTitle={selectedContestData?.title}
-                onBack={() => setActiveTab('overview')}
-              />
-            ) : (
-              <Card className="bg-slate-800 border-slate-700">
-                <CardContent className="p-6 text-center">
-                  <p className="text-slate-400 mb-4">Select a contest from the Overview tab to manage its problems</p>
-                  <Button 
-                    onClick={() => setActiveTab('overview')}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    Go to Overview
-                  </Button>
-                </CardContent>
-              </Card>
+            {filteredContests.length === 0 && (
+              <div className="text-center py-12">
+                <Trophy className="h-16 w-16 text-slate-400 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-white mb-2">No contests found</h3>
+                <p className="text-slate-400">
+                  {searchTerm ? 'Try adjusting your search terms' : 'Create your first contest to get started'}
+                </p>
+              </div>
             )}
-          </TabsContent>
-        </Tabs>
+          </>
+        )}
+
+        {showCreateForm && (
+          <CreateContestForm onClose={() => setShowCreateForm(false)} />
+        )}
       </div>
     </div>
-  );
-};
-
-const ContestCard = ({ contest, onStatusUpdate, onSelect, isSelected }: any) => {
-  const { data: leaderboard } = useContestLeaderboard(contest.id);
-  
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'bg-green-600';
-      case 'draft': return 'bg-yellow-600';
-      case 'ended': return 'bg-red-600';
-      default: return 'bg-gray-600';
-    }
-  };
-
-  const canActivate = contest.status === 'draft';
-  const canEnd = contest.status === 'active';
-
-  return (
-    <Card 
-      className={`bg-slate-800 border-slate-700 cursor-pointer transition-all ${
-        isSelected ? 'ring-2 ring-blue-500' : 'hover:bg-slate-750'
-      }`}
-      onClick={onSelect}
-    >
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-white">{contest.title}</CardTitle>
-            <p className="text-slate-400 text-sm mt-1">{contest.description}</p>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Badge className={getStatusColor(contest.status)}>
-              {contest.status}
-            </Badge>
-            {contest.status === 'active' && (
-              <Badge variant="outline" className="text-slate-300 border-slate-600">
-                <Users className="h-3 w-3 mr-1" />
-                {leaderboard?.length || 0} participants
-              </Badge>
-            )}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-slate-400">
-            <div>Start: {new Date(contest.start_time).toLocaleString()}</div>
-            <div>Duration: {contest.duration_minutes} minutes</div>
-          </div>
-          
-          <div className="flex space-x-2">
-            {canActivate && (
-              <Button
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStatusUpdate(contest.id, 'active');
-                }}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <Play className="h-4 w-4 mr-1" />
-                Activate
-              </Button>
-            )}
-            {canEnd && (
-              <Button
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStatusUpdate(contest.id, 'ended');
-                }}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                <Square className="h-4 w-4 mr-1" />
-                End Contest
-              </Button>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 };
 

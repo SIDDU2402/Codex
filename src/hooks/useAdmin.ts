@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -75,6 +74,81 @@ export const useUpdateContestStatus = () => {
     onError: () => {
       toast.error('Failed to update contest status');
     },
+  });
+};
+
+export const useReactivateContest = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ contestId, startDate, endDate }: { contestId: string; startDate: string; endDate: string }) => {
+      const { error } = await supabase
+        .from('contests')
+        .update({ 
+          status: 'upcoming',
+          start_date: startDate,
+          end_date: endDate
+        })
+        .eq('id', contestId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-contests'] });
+      toast.success('Contest reactivated successfully!');
+    },
+    onError: () => {
+      toast.error('Failed to reactivate contest');
+    },
+  });
+};
+
+export const useContestStats = (contestId: string) => {
+  return useQuery({
+    queryKey: ['contest-stats', contestId],
+    queryFn: async () => {
+      // Get participant count
+      const { data: participants, error: participantsError } = await supabase
+        .from('contest_participants')
+        .select('user_id')
+        .eq('contest_id', contestId);
+
+      if (participantsError) throw participantsError;
+
+      // Get submission statistics
+      const { data: submissions, error: submissionsError } = await supabase
+        .from('submissions')
+        .select('user_id, score')
+        .eq('contest_id', contestId);
+
+      if (submissionsError) throw submissionsError;
+
+      // Get leaderboard data
+      const { data: leaderboard, error: leaderboardError } = await supabase
+        .from('contest_leaderboard')
+        .select('*')
+        .eq('contest_id', contestId)
+        .order('rank', { ascending: true })
+        .limit(10);
+
+      if (leaderboardError) throw leaderboardError;
+
+      const totalParticipants = participants?.length || 0;
+      const activeParticipants = [...new Set(submissions?.map(s => s.user_id))].length;
+      const totalSubmissions = submissions?.length || 0;
+      const averageScore = submissions?.length > 0 
+        ? Math.round((submissions.reduce((sum, sub) => sum + (sub.score || 0), 0) / submissions.length) * 100) / 100
+        : 0;
+
+      return {
+        totalParticipants,
+        activeParticipants,
+        totalSubmissions,
+        averageScore,
+        topParticipants: leaderboard || []
+      };
+    },
+    enabled: !!contestId,
   });
 };
 
