@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,13 +65,20 @@ const CreateContestForm = () => {
       return;
     }
     
+    // Calculate end_time based on start_time and duration_minutes
+    const endTime = new Date(startTime.getTime() + formData.duration_minutes * 60 * 1000);
+    
     const contestData = {
       title: formData.title.trim(),
       description: formData.description.trim() || undefined,
       start_time: formData.start_time,
+      end_time: endTime.toISOString(),
       duration_minutes: formData.duration_minutes,
       max_participants: formData.max_participants ? parseInt(formData.max_participants) : undefined,
+      status: 'upcoming' as const,
     };
+
+    console.log('Creating contest with data:', contestData);
 
     try {
       await createContest.mutateAsync(contestData);

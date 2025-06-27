@@ -1,3 +1,4 @@
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -32,16 +33,27 @@ export const useCreateContest = () => {
     mutationFn: async (contestData: any) => {
       if (!user) throw new Error('Must be logged in to create contest');
 
+      console.log('Inserting contest data:', contestData);
+
       const { data, error } = await supabase
         .from('contests')
         .insert({
-          ...contestData,
+          title: contestData.title,
+          description: contestData.description,
+          start_time: contestData.start_time,
+          end_time: contestData.end_time,
+          duration_minutes: contestData.duration_minutes,
+          max_participants: contestData.max_participants,
+          status: contestData.status || 'upcoming',
           created_by: user.id,
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Contest creation error:', error);
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {
