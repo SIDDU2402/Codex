@@ -86,8 +86,8 @@ export const useReactivateContest = () => {
         .from('contests')
         .update({ 
           status: 'upcoming',
-          start_date: startDate,
-          end_date: endDate
+          start_time: startDate,
+          end_time: endDate
         })
         .eq('id', contestId);
 

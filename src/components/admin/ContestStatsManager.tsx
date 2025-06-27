@@ -5,18 +5,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, Users, Trophy, RotateCcw, Eye } from 'lucide-react';
-import { useUpdateContestStatus, useContestStats, useReactivateContest } from '@/hooks/useAdmin';
-import { toast } from 'sonner';
+import { Calendar, Users, Trophy, Award, BarChart3, Clock } from 'lucide-react';
+import { useContestStats, useReactivateContest } from '@/hooks/useAdmin';
 
 interface Contest {
   id: string;
   title: string;
   description: string;
-  start_date: string;
-  end_date: string;
   status: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  max_participants: number;
   created_at: string;
+  created_by: string;
+  updated_at: string;
 }
 
 interface ContestStatsManagerProps {
@@ -25,47 +28,31 @@ interface ContestStatsManagerProps {
 
 const ContestStatsManager = ({ contest }: ContestStatsManagerProps) => {
   const [showReactivateForm, setShowReactivateForm] = useState(false);
-  const [newStartDate, setNewStartDate] = useState('');
-  const [newEndDate, setNewEndDate] = useState('');
-  const [showStats, setShowStats] = useState(false);
-  
-  const updateContestStatus = useUpdateContestStatus();
+  const [reactivateData, setReactivateData] = useState({
+    startDate: '',
+    endDate: ''
+  });
+
   const { data: stats, isLoading: statsLoading } = useContestStats(contest.id);
   const reactivateContest = useReactivateContest();
 
-  const handleReactivate = async () => {
-    if (!newStartDate || !newEndDate) {
-      toast.error('Please select both start and end dates');
-      return;
-    }
-
-    const startDate = new Date(newStartDate);
-    const endDate = new Date(newEndDate);
-
-    if (startDate >= endDate) {
-      toast.error('Start date must be before end date');
-      return;
-    }
-
-    if (startDate < new Date()) {
-      toast.error('Start date must be in the future');
+  const handleReactivate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!reactivateData.startDate || !reactivateData.endDate) {
       return;
     }
 
     try {
       await reactivateContest.mutateAsync({
         contestId: contest.id,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString()
+        startDate: reactivateData.startDate,
+        endDate: reactivateData.endDate
       });
-      
       setShowReactivateForm(false);
-      setNewStartDate('');
-      setNewEndDate('');
-      toast.success('Contest reactivated successfully!');
+      setReactivateData({ startDate: '', endDate: '' });
     } catch (error) {
-      console.error('Reactivate error:', error);
-      toast.error('Failed to reactivate contest');
+      console.error('Failed to reactivate contest:', error);
     }
   };
 
@@ -84,166 +71,120 @@ const ContestStatsManager = ({ contest }: ContestStatsManagerProps) => {
     }
   };
 
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  // Set minimum date-time to current time
+  const now = new Date();
+  const minDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16);
+
   return (
-    <Card className="bg-slate-800 border-slate-700">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-white flex items-center">
-            <Trophy className="h-5 w-5 mr-2" />
-            Contest Management
-          </CardTitle>
-          <Badge className={`${getStatusColor(contest.status)} text-white`}>
-            {contest.status.toUpperCase()}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label className="text-slate-300">Start Date</Label>
-            <div className="flex items-center mt-1">
-              <Calendar className="h-4 w-4 text-slate-400 mr-2" />
-              <span className="text-white text-sm">
-                {new Date(contest.start_date).toLocaleString()}
-              </span>
+    <div className="space-y-6">
+      {/* Contest Overview */}
+      <Card className="bg-slate-800/50 border-slate-700">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-white flex items-center">
+              <Trophy className="h-5 w-5 mr-2" />
+              Contest Overview
+            </CardTitle>
+            <Badge className={`${getStatusColor(contest.status)} text-white`}>
+              {contest.status.toUpperCase()}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div className="flex items-center text-slate-300">
+              <Calendar className="h-4 w-4 mr-2" />
+              <div>
+                <div className="font-medium">Start Time</div>
+                <div className="text-slate-400">{formatDateTime(contest.start_time)}</div>
+              </div>
+            </div>
+            <div className="flex items-center text-slate-300">
+              <Calendar className="h-4 w-4 mr-2" />
+              <div>
+                <div className="font-medium">End Time</div>
+                <div className="text-slate-400">{formatDateTime(contest.end_time)}</div>
+              </div>
+            </div>
+            <div className="flex items-center text-slate-300">
+              <Clock className="h-4 w-4 mr-2" />
+              <div>
+                <div className="font-medium">Duration</div>
+                <div className="text-slate-400">{contest.duration_minutes} minutes</div>
+              </div>
+            </div>
+            <div className="flex items-center text-slate-300">
+              <Users className="h-4 w-4 mr-2" />
+              <div>
+                <div className="font-medium">Max Participants</div>
+                <div className="text-slate-400">{contest.max_participants || 'Unlimited'}</div>
+              </div>
             </div>
           </div>
-          <div>
-            <Label className="text-slate-300">End Date</Label>
-            <div className="flex items-center mt-1">
-              <Calendar className="h-4 w-4 text-slate-400 mr-2" />
-              <span className="text-white text-sm">
-                {new Date(contest.end_date).toLocaleString()}
-              </span>
-            </div>
-          </div>
-        </div>
 
-        <div className="flex items-center space-x-4">
-          <Button
-            onClick={() => setShowStats(!showStats)}
-            variant="outline"
-            className="border-slate-600 text-slate-300 hover:text-white"
-          >
-            <Eye className="h-4 w-4 mr-2" />
-            {showStats ? 'Hide' : 'Show'} Statistics
-          </Button>
-          
           {(contest.status === 'completed' || contest.status === 'cancelled') && (
-            <Button
-              onClick={() => setShowReactivateForm(!showReactivateForm)}
-              variant="outline"
-              className="border-slate-600 text-slate-300 hover:text-white"
-            >
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Reactivate Contest
-            </Button>
+            <div className="pt-4 border-t border-slate-700">
+              <Button
+                onClick={() => setShowReactivateForm(!showReactivateForm)}
+                className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
+              >
+                Reactivate Contest
+              </Button>
+            </div>
           )}
-        </div>
+        </CardContent>
+      </Card>
 
-        {showStats && (
-          <Card className="bg-slate-900 border-slate-700">
-            <CardHeader>
-              <CardTitle className="text-white text-lg">Contest Statistics</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {statsLoading ? (
-                <div className="text-slate-400">Loading statistics...</div>
-              ) : stats ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-white">{stats.totalParticipants}</div>
-                    <div className="text-sm text-slate-400">Total Participants</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-400">{stats.activeParticipants}</div>
-                    <div className="text-sm text-slate-400">Active Participants</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-400">{stats.totalSubmissions}</div>
-                    <div className="text-sm text-slate-400">Total Submissions</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-yellow-400">{stats.averageScore}</div>
-                    <div className="text-sm text-slate-400">Average Score</div>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-slate-400">No statistics available</div>
-              )}
-
-              {stats?.topParticipants && stats.topParticipants.length > 0 && (
-                <div className="mt-6">
-                  <h4 className="text-white font-semibold mb-3">Top Participants</h4>
-                  <div className="space-y-2">
-                    {stats.topParticipants.map((participant: any, index: number) => (
-                      <div key={participant.user_id} className="flex items-center justify-between bg-slate-800 p-3 rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <Badge className={`${
-                            index === 0 ? 'bg-yellow-500' :
-                            index === 1 ? 'bg-gray-400' :
-                            index === 2 ? 'bg-orange-600' :
-                            'bg-slate-600'
-                          } text-white text-xs`}>
-                            #{index + 1}
-                          </Badge>
-                          <div>
-                            <div className="text-white font-medium">
-                              {participant.full_name || participant.username || 'Anonymous'}
-                            </div>
-                            <div className="text-xs text-slate-400">
-                              {participant.problems_solved} problems solved
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-white font-semibold">{participant.total_score}</div>
-                          <div className="text-xs text-slate-400">points</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {showReactivateForm && (
-          <Card className="bg-slate-900 border-slate-700">
-            <CardHeader>
-              <CardTitle className="text-white text-lg">Reactivate Contest</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+      {/* Reactivate Contest Form */}
+      {showReactivateForm && (
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardHeader>
+            <CardTitle className="text-white">Reactivate Contest</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleReactivate} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-slate-300">New Start Date</Label>
+                  <Label htmlFor="startDate" className="text-slate-300">New Start Time</Label>
                   <Input
+                    id="startDate"
                     type="datetime-local"
-                    value={newStartDate}
-                    onChange={(e) => setNewStartDate(e.target.value)}
-                    className="bg-slate-800 border-slate-600 text-white"
+                    value={reactivateData.startDate}
+                    onChange={(e) => setReactivateData(prev => ({ ...prev, startDate: e.target.value }))}
+                    min={minDateTime}
+                    required
+                    className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
                 <div>
-                  <Label className="text-slate-300">New End Date</Label>
+                  <Label htmlFor="endDate" className="text-slate-300">New End Time</Label>
                   <Input
+                    id="endDate"
                     type="datetime-local"
-                    value={newEndDate}
-                    onChange={(e) => setNewEndDate(e.target.value)}
-                    className="bg-slate-800 border-slate-600 text-white"
+                    value={reactivateData.endDate}
+                    onChange={(e) => setReactivateData(prev => ({ ...prev, endDate: e.target.value }))}
+                    min={reactivateData.startDate || minDateTime}
+                    required
+                    className="bg-slate-700 border-slate-600 text-white"
                   />
                 </div>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex space-x-2">
                 <Button
-                  onClick={handleReactivate}
+                  type="submit"
                   disabled={reactivateContest.isPending}
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
                 >
                   {reactivateContest.isPending ? 'Reactivating...' : 'Reactivate Contest'}
                 </Button>
                 <Button
+                  type="button"
                   onClick={() => setShowReactivateForm(false)}
                   variant="outline"
                   className="border-slate-600 text-slate-300 hover:text-white"
@@ -251,11 +192,114 @@ const ContestStatsManager = ({ contest }: ContestStatsManagerProps) => {
                   Cancel
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-        )}
-      </CardContent>
-    </Card>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Contest Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardContent className="p-4">
+            <div className="flex items-center">
+              <Users className="h-8 w-8 text-blue-400" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-slate-300">Total Participants</p>
+                <p className="text-2xl font-bold text-white">
+                  {statsLoading ? '...' : stats?.totalParticipants || 0}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardContent className="p-4">
+            <div className="flex items-center">
+              <Award className="h-8 w-8 text-green-400" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-slate-300">Active Participants</p>
+                <p className="text-2xl font-bold text-white">
+                  {statsLoading ? '...' : stats?.activeParticipants || 0}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardContent className="p-4">
+            <div className="flex items-center">
+              <BarChart3 className="h-8 w-8 text-purple-400" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-slate-300">Total Submissions</p>
+                <p className="text-2xl font-bold text-white">
+                  {statsLoading ? '...' : stats?.totalSubmissions || 0}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardContent className="p-4">
+            <div className="flex items-center">
+              <Trophy className="h-8 w-8 text-yellow-400" />
+              <div className="ml-4">
+                <p className="text-sm font-medium text-slate-300">Average Score</p>
+                <p className="text-2xl font-bold text-white">
+                  {statsLoading ? '...' : stats?.averageScore || 0}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Top Participants */}
+      {stats?.topParticipants && stats.topParticipants.length > 0 && (
+        <Card className="bg-slate-800/50 border-slate-700">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center">
+              <Trophy className="h-5 w-5 mr-2" />
+              Top Participants
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {stats.topParticipants.map((participant, index) => (
+                <div key={participant.user_id} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
+                  <div className="flex items-center">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                      index === 0 ? 'bg-yellow-500 text-black' :
+                      index === 1 ? 'bg-gray-400 text-black' :
+                      index === 2 ? 'bg-amber-600 text-white' :
+                      'bg-slate-600 text-white'
+                    }`}>
+                      {participant.rank}
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-white font-medium">{participant.full_name || participant.username}</p>
+                      <p className="text-slate-400 text-sm">
+                        {participant.problems_solved} problems solved
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-white font-bold">{participant.total_score} pts</p>
+                    {participant.last_submission_time && (
+                      <p className="text-slate-400 text-sm">
+                        {new Date(participant.last_submission_time).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 };
 

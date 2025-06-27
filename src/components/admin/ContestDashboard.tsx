@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -5,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Search, Calendar, Users, Trophy, Settings } from 'lucide-react';
-import { useAdminContests, useUpdateContestStatus } from '@/hooks/useContests';
+import { useAdminContests } from '@/hooks/useContests';
+import { useUpdateContestStatus } from '@/hooks/useAdmin';
 import CreateContestForm from './CreateContestForm';
 import ContestProblemManager from './ContestProblemManager';
 import ContestStatsManager from './ContestStatsManager';
@@ -152,7 +154,7 @@ const ContestDashboard = () => {
                       <div className="flex items-center text-slate-400">
                         <Calendar className="h-4 w-4 mr-2" />
                         <span>
-                          {new Date(contest.start_date).toLocaleDateString()} - {new Date(contest.end_date).toLocaleDateString()}
+                          {new Date(contest.start_time).toLocaleDateString()} - {new Date(contest.end_time).toLocaleDateString()}
                         </span>
                       </div>
                       <div className="flex items-center text-slate-400">
@@ -193,7 +195,18 @@ const ContestDashboard = () => {
         )}
 
         {showCreateForm && (
-          <CreateContestForm onClose={() => setShowCreateForm(false)} />
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="max-w-2xl w-full">
+              <CreateContestForm />
+              <Button
+                onClick={() => setShowCreateForm(false)}
+                variant="outline"
+                className="mt-4 border-slate-600 text-slate-300 hover:text-white"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
         )}
       </div>
     </div>
