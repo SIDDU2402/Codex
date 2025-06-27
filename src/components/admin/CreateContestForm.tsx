@@ -70,11 +70,11 @@ const CreateContestForm = () => {
     
     const contestData = {
       title: formData.title.trim(),
-      description: formData.description.trim() || undefined,
-      start_time: formData.start_time,
+      description: formData.description.trim() || null,
+      start_time: startTime.toISOString(),
       end_time: endTime.toISOString(),
       duration_minutes: formData.duration_minutes,
-      max_participants: formData.max_participants ? parseInt(formData.max_participants) : undefined,
+      max_participants: formData.max_participants ? parseInt(formData.max_participants) : null,
       status: 'upcoming' as const,
     };
 
@@ -82,6 +82,12 @@ const CreateContestForm = () => {
 
     try {
       await createContest.mutateAsync(contestData);
+      
+      toast({
+        title: "Success",
+        description: "Contest created successfully!",
+      });
+      
       // Reset form on success
       setFormData({
         title: '',
@@ -90,11 +96,17 @@ const CreateContestForm = () => {
         duration_minutes: 180,
         max_participants: '',
       });
+      
       // Refresh the contest list
       queryClient.invalidateQueries({ queryKey: ['admin-contests'] });
       queryClient.invalidateQueries({ queryKey: ['contests'] });
     } catch (error) {
       console.error('Contest creation failed:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create contest. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
