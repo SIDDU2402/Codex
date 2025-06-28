@@ -1,4 +1,3 @@
-
 import { useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { Button } from '@/components/ui/button';
@@ -55,13 +54,14 @@ const MonacoCodeEditor = ({ problemId, contestId, onSubmit, testCases }: MonacoC
 
   const languages = [
     { value: 'python', label: 'Python 3', monaco: 'python', ext: '.py' },
-    { value: 'java', label: 'Java 11', monaco: 'java', ext: '.java' },
-    { value: 'cpp', label: 'C++ 17', monaco: 'cpp', ext: '.cpp' },
-    { value: 'c', label: 'C (GCC)', monaco: 'c', ext: '.c' },
-    { value: 'javascript', label: 'JavaScript (Node.js)', monaco: 'javascript', ext: '.js' },
+    { value: 'java', label: 'Java', monaco: 'java', ext: '.java' },
+    { value: 'cpp', label: 'C++', monaco: 'cpp', ext: '.cpp' },
+    { value: 'c', label: 'C', monaco: 'c', ext: '.c' },
+    { value: 'javascript', label: 'JavaScript', monaco: 'javascript', ext: '.js' },
   ];
 
   function getDefaultCode(lang: string): string {
+    // ... keep existing code (default code templates)
     const templates = {
       python: `# Read input
 n = int(input())
@@ -69,7 +69,7 @@ n = int(input())
 print(n)`,
       java: `import java.util.*;
 
-public class Solution {
+public class Main {
     public static void main(String[] args) {
         Scanner sc = new Scanner(System.in);
         int n = sc.nextInt();
@@ -124,6 +124,7 @@ rl.on('line', (input) => {
   };
 
   const handleEditorDidMount = (editor: any, monaco: any) => {
+    // ... keep existing code (editor setup and theme configuration)
     editorRef.current = editor;
     
     monaco.editor.defineTheme('examTheme', {
@@ -154,7 +155,7 @@ rl.on('line', (input) => {
     });
   };
 
-  // Custom execution with user input
+  // Custom execution with user input using Judge0
   const handleCustomRun = async () => {
     if (!code.trim()) {
       toast.error('Please write some code before running');
@@ -167,7 +168,7 @@ rl.on('line', (input) => {
     try {
       const startTime = Date.now();
       
-      const { data, error } = await supabase.functions.invoke('compile-and-run', {
+      const { data, error } = await supabase.functions.invoke('judge0-execute', {
         body: {
           code,
           language,
@@ -190,14 +191,16 @@ rl.on('line', (input) => {
         output: result.actual || '',
         error: result.error,
         compilation_error: result.compilation_error,
-        execution_time: executionTime,
-        status: result.compilation_error || result.error ? 'error' : 'success'
+        execution_time: result.execution_time || executionTime,
+        status: result.compilation_error || result.error || result.timeout ? 'error' : 'success'
       });
 
       if (result.compilation_error) {
         toast.error('Compilation Error');
       } else if (result.error) {
         toast.error('Runtime Error');
+      } else if (result.timeout) {
+        toast.error('Time Limit Exceeded');
       } else {
         toast.success('Code executed successfully');
       }
@@ -216,7 +219,7 @@ rl.on('line', (input) => {
     }
   };
 
-  // Run against sample test cases
+  // Run against sample test cases using Judge0
   const handleRun = async () => {
     if (!testCases || testCases.length === 0) {
       toast.error('No test cases available for this problem');
@@ -241,7 +244,7 @@ rl.on('line', (input) => {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('compile-and-run', {
+      const { data, error } = await supabase.functions.invoke('judge0-execute', {
         body: {
           code,
           language,
@@ -258,13 +261,13 @@ rl.on('line', (input) => {
         actual: result.actual,
         error: result.error,
         compilation_error: result.compilation_error,
-        execution_time: 0
+        execution_time: result.execution_time || 0
       })));
 
       const passedCount = data.testResults.filter((r: any) => r.passed).length;
       
       if (data.compilation_error) {
-        toast.error('Compilation Error: ' + data.compilation_error);
+        toast.error('Compilation Error');
       } else if (passedCount === data.testResults.length) {
         toast.success(`All ${passedCount} sample test cases passed!`);
       } else {
@@ -344,6 +347,9 @@ rl.on('line', (input) => {
             <Badge variant="outline" className="border-slate-600 text-slate-300">
               {currentLanguage?.label}
             </Badge>
+            <Badge variant="outline" className="border-green-600 text-green-400">
+              Judge0 Powered
+            </Badge>
           </div>
           <Select value={language} onValueChange={handleLanguageChange}>
             <SelectTrigger className="w-48 bg-slate-700 border-slate-600 text-white">
@@ -412,7 +418,7 @@ rl.on('line', (input) => {
 
         {/* Keyboard shortcuts info */}
         <div className="mt-2 text-xs text-slate-400">
-          Shortcuts: Ctrl+Enter (Run) • Ctrl+Shift+Enter (Submit)
+          Shortcuts: Ctrl+Enter (Run) • Ctrl+Shift+Enter (Submit) • Powered by Judge0 API
         </div>
       </div>
 
@@ -500,6 +506,9 @@ rl.on('line', (input) => {
                     <Badge className="ml-2 text-xs">
                       {executionOutput.execution_time}ms
                     </Badge>
+                    <Badge variant="outline" className="ml-2 text-xs border-green-600 text-green-400">
+                      Judge0
+                    </Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -542,6 +551,9 @@ rl.on('line', (input) => {
                     <Badge className={`ml-2 ${testResults.every(r => r.passed) ? 'bg-green-600' : 'bg-red-600'} text-white text-xs`}>
                       {testResults.filter(r => r.passed).length}/{testResults.length} Passed
                     </Badge>
+                    <Badge variant="outline" className="ml-2 text-xs border-green-600 text-green-400">
+                      Judge0
+                    </Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -556,6 +568,11 @@ rl.on('line', (input) => {
                         <span className="text-white text-sm font-medium">
                           Sample Test Case {index + 1}
                         </span>
+                        {result.execution_time && (
+                          <Badge className="ml-2 text-xs">
+                            {result.execution_time}ms
+                          </Badge>
+                        )}
                       </div>
                       <div className="space-y-2 text-xs">
                         <div>
