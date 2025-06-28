@@ -15,6 +15,7 @@ import ProblemPanel from "@/components/ProblemPanel";
 import CodeEditor from "@/components/CodeEditor";
 import { useContestProblems, useContestLeaderboard } from "@/hooks/useContests";
 import { useRealtimeLeaderboard } from "@/hooks/useRealtime";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ExamInterfaceProps {
   contestId: string;
@@ -25,12 +26,43 @@ const ExamInterface = ({ contestId, onBack }: ExamInterfaceProps) => {
   const [currentProblem, setCurrentProblem] = useState(1);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [submittedProblems, setSubmittedProblems] = useState<number[]>([]);
+  const [testCases, setTestCases] = useState<Array<{
+    id: string;
+    input_data: string;
+    expected_output: string;
+    is_sample: boolean;
+    points: number;
+  }>>([]);
   
   const { data: problems, isLoading: problemsLoading } = useContestProblems(contestId);
   const { data: leaderboard } = useContestLeaderboard(contestId);
   
   // Set up real-time leaderboard updates
   useRealtimeLeaderboard(contestId);
+
+  // Load test cases for current problem
+  useEffect(() => {
+    const loadTestCases = async () => {
+      if (problems && problems[currentProblem - 1]) {
+        const currentProblemData = problems[currentProblem - 1];
+        
+        const { data: cases, error } = await supabase
+          .from('test_cases')
+          .select('*')
+          .eq('problem_id', currentProblemData.id)
+          .order('created_at', { ascending: true });
+        
+        if (!error && cases) {
+          setTestCases(cases);
+        } else {
+          console.error('Error loading test cases:', error);
+          setTestCases([]);
+        }
+      }
+    };
+    
+    loadTestCases();
+  }, [problems, currentProblem]);
 
   const handleTimeUp = () => {
     alert("Time's up! Your solutions will be automatically submitted.");
@@ -165,6 +197,7 @@ const ExamInterface = ({ contestId, onBack }: ExamInterfaceProps) => {
               problemId={currentProblemData?.id}
               contestId={contestId}
               onSubmit={handleSubmit}
+              testCases={testCases}
             />
           </div>
         </div>
