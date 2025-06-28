@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -65,6 +66,8 @@ serve(async (req) => {
       /Runtime\.getRuntime/i,
       /ProcessBuilder/i,
       /\.exec\s*\(/i,
+      /require\s*\(\s*['"]fs['"]\s*\)/i,
+      /require\s*\(\s*['"]child_process['"]\s*\)/i,
     ];
 
     for (const pattern of dangerousPatterns) {
@@ -186,6 +189,16 @@ async function compileAndRun(code: string, language: string, input: string): Pro
   }
 }
 
+async function createTempDirectory(): Promise<string> {
+  const tempDir = `/tmp/code_exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  try {
+    await Deno.mkdir(tempDir, { recursive: true });
+    return tempDir;
+  } catch (error) {
+    throw new Error(`Failed to create temp directory: ${error.message}`);
+  }
+}
+
 async function executePython(code: string, input: string): Promise<{
   output: string;
   error?: string;
@@ -197,7 +210,8 @@ async function executePython(code: string, input: string): Promise<{
   const startTime = Date.now();
   
   try {
-    const tempFileName = `solution_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.py`;
+    const tempDir = await createTempDirectory();
+    const fileName = `${tempDir}/main.py`;
     
     // Enhanced Python wrapper with better error handling and security
     const wrappedCode = `
@@ -247,10 +261,11 @@ finally:
     signal.alarm(0)
 `;
 
-    await Deno.writeTextFile(tempFileName, wrappedCode);
+    await Deno.writeTextFile(fileName, wrappedCode);
     
     const cmd = new Deno.Command("python3", {
-      args: [tempFileName],
+      args: [fileName],
+      cwd: tempDir,
       stdin: "null",
       stdout: "piped",
       stderr: "piped",
@@ -268,8 +283,9 @@ finally:
     const { code: exitCode, stdout, stderr } = await process.output();
     clearTimeout(timeoutId);
     
+    // Cleanup
     try {
-      await Deno.remove(tempFileName);
+      await Deno.remove(tempDir, { recursive: true });
     } catch {
       // Ignore cleanup errors
     }
@@ -314,7 +330,7 @@ finally:
   } catch (error) {
     return {
       output: '',
-      error: `Python execution error: ${error.message}`,
+      error: `File write or access failed: ${error.message}`,
       execution_time: Date.now() - startTime
     };
   }
@@ -331,20 +347,32 @@ async function executeJava(code: string, input: string): Promise<{
   const startTime = Date.now();
   
   try {
-    const tempFileName = `Solution_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const javaFileName = `${tempFileName}.java`;
+    const tempDir = await createTempDirectory();
+    const fileName = `${tempDir}/Main.java`;
     
     // Extract class name from code or use default
     const classNameMatch = code.match(/public\s+class\s+(\w+)/);
-    const className = classNameMatch ? classNameMatch[1] : 'Solution';
+    let finalCode = code;
     
-    const wrappedCode = code.replace(/public\s+class\s+\w+/, `public class ${tempFileName}`);
+    // Ensure the class name is "Main" for consistent execution
+    if (classNameMatch && classNameMatch[1] !== 'Main') {
+      finalCode = code.replace(/public\s+class\s+\w+/, 'public class Main');
+    } else if (!classNameMatch) {
+      // Wrap code in Main class if no public class found
+      finalCode = `
+public class Main {
+    public static void main(String[] args) {
+${code.split('\n').map(line => '        ' + line).join('\n')}
+    }
+}`;
+    }
     
-    await Deno.writeTextFile(javaFileName, wrappedCode);
+    await Deno.writeTextFile(fileName, finalCode);
     
     // Compile Java code
     const compileCmd = new Deno.Command("javac", {
-      args: ["-cp", ".", javaFileName],
+      args: ["-cp", ".", "Main.java"],
+      cwd: tempDir,
       stdin: "null",
       stdout: "piped",
       stderr: "piped",
@@ -357,12 +385,12 @@ async function executeJava(code: string, input: string): Promise<{
       
       // Clean up
       try {
-        await Deno.remove(javaFileName);
+        await Deno.remove(tempDir, { recursive: true });
       } catch {}
       
       return {
         output: '',
-        compilation_error: errorMessage.replace(new RegExp(tempFileName, 'g'), className),
+        compilation_error: errorMessage,
         execution_time: Date.now() - startTime
       };
     }
@@ -374,8 +402,9 @@ async function executeJava(code: string, input: string): Promise<{
         "java",
         "-Xmx512m", // Memory limit
         "-cp", ".",
-        tempFileName
+        "Main"
       ],
+      cwd: tempDir,
       stdin: "piped",
       stdout: "piped",
       stderr: "piped",
@@ -391,8 +420,7 @@ async function executeJava(code: string, input: string): Promise<{
     
     // Clean up temporary files
     try {
-      await Deno.remove(javaFileName);
-      await Deno.remove(`${tempFileName}.class`);
+      await Deno.remove(tempDir, { recursive: true });
     } catch {
       // Ignore cleanup errors
     }
@@ -412,7 +440,7 @@ async function executeJava(code: string, input: string): Promise<{
       const errorMessage = new TextDecoder().decode(stderr);
       return {
         output: '',
-        error: errorMessage.replace(new RegExp(tempFileName, 'g'), className),
+        error: errorMessage,
         execution_time: executionTime
       };
     }
@@ -425,7 +453,7 @@ async function executeJava(code: string, input: string): Promise<{
   } catch (error) {
     return {
       output: '',
-      error: `Java execution error: ${error.message}`,
+      error: `File write or access failed: ${error.message}`,
       execution_time: Date.now() - startTime
     };
   }
@@ -442,14 +470,15 @@ async function executeCpp(code: string, input: string): Promise<{
   const startTime = Date.now();
   
   try {
-    const tempFileName = `solution_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const cppFileName = `${tempFileName}.cpp`;
-    const execFileName = tempFileName;
+    const tempDir = await createTempDirectory();
+    const sourceFile = `${tempDir}/main.cpp`;
+    const execFile = `${tempDir}/main`;
     
-    await Deno.writeTextFile(cppFileName, code);
+    await Deno.writeTextFile(sourceFile, code);
     
     const compileCmd = new Deno.Command("g++", {
-      args: ["-std=c++17", "-O2", "-o", execFileName, cppFileName],
+      args: ["-std=c++17", "-O2", "-o", "main", "main.cpp"],
+      cwd: tempDir,
       stdin: "null",
       stdout: "piped",
       stderr: "piped",
@@ -461,7 +490,7 @@ async function executeCpp(code: string, input: string): Promise<{
       const errorMessage = new TextDecoder().decode(compileStderr);
       
       try {
-        await Deno.remove(cppFileName);
+        await Deno.remove(tempDir, { recursive: true });
       } catch {}
       
       return {
@@ -472,7 +501,8 @@ async function executeCpp(code: string, input: string): Promise<{
     }
     
     const runCmd = new Deno.Command("timeout", {
-      args: [`${Math.floor(EXECUTION_TIMEOUT / 1000)}s`, `./${execFileName}`],
+      args: [`${Math.floor(EXECUTION_TIMEOUT / 1000)}s`, "./main"],
+      cwd: tempDir,
       stdin: "piped",
       stdout: "piped",
       stderr: "piped",
@@ -487,8 +517,7 @@ async function executeCpp(code: string, input: string): Promise<{
     const { code: runExitCode, stdout, stderr } = await process.output();
     
     try {
-      await Deno.remove(cppFileName);
-      await Deno.remove(execFileName);
+      await Deno.remove(tempDir, { recursive: true });
     } catch {}
     
     const executionTime = Date.now() - startTime;
@@ -519,7 +548,7 @@ async function executeCpp(code: string, input: string): Promise<{
   } catch (error) {
     return {
       output: '',
-      error: `C++ execution error: ${error.message}`,
+      error: `File write or access failed: ${error.message}`,
       execution_time: Date.now() - startTime
     };
   }
@@ -536,14 +565,15 @@ async function executeC(code: string, input: string): Promise<{
   const startTime = Date.now();
   
   try {
-    const tempFileName = `solution_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const cFileName = `${tempFileName}.c`;
-    const execFileName = tempFileName;
+    const tempDir = await createTempDirectory();
+    const sourceFile = `${tempDir}/main.c`;
+    const execFile = `${tempDir}/main`;
     
-    await Deno.writeTextFile(cFileName, code);
+    await Deno.writeTextFile(sourceFile, code);
     
     const compileCmd = new Deno.Command("gcc", {
-      args: ["-std=c11", "-O2", "-o", execFileName, cFileName],
+      args: ["-std=c11", "-O2", "-o", "main", "main.c"],
+      cwd: tempDir,
       stdin: "null",
       stdout: "piped",
       stderr: "piped",
@@ -555,7 +585,7 @@ async function executeC(code: string, input: string): Promise<{
       const errorMessage = new TextDecoder().decode(compileStderr);
       
       try {
-        await Deno.remove(cFileName);
+        await Deno.remove(tempDir, { recursive: true });
       } catch {}
       
       return {
@@ -566,7 +596,8 @@ async function executeC(code: string, input: string): Promise<{
     }
     
     const runCmd = new Deno.Command("timeout", {
-      args: [`${Math.floor(EXECUTION_TIMEOUT / 1000)}s`, `./${execFileName}`],
+      args: [`${Math.floor(EXECUTION_TIMEOUT / 1000)}s`, "./main"],
+      cwd: tempDir,
       stdin: "piped",
       stdout: "piped",
       stderr: "piped",
@@ -581,8 +612,7 @@ async function executeC(code: string, input: string): Promise<{
     const { code: runExitCode, stdout, stderr } = await process.output();
     
     try {
-      await Deno.remove(cFileName);
-      await Deno.remove(execFileName);
+      await Deno.remove(tempDir, { recursive: true });
     } catch {}
     
     const executionTime = Date.now() - startTime;
@@ -613,7 +643,7 @@ async function executeC(code: string, input: string): Promise<{
   } catch (error) {
     return {
       output: '',
-      error: `C execution error: ${error.message}`,
+      error: `File write or access failed: ${error.message}`,
       execution_time: Date.now() - startTime
     };
   }
@@ -629,50 +659,64 @@ async function executeJavaScript(code: string, input: string): Promise<{
 }> {
   const startTime = Date.now();
   
-  const wrappedCode = `
-    const input = ${JSON.stringify(input)};
-    const inputLines = input.trim().split('\\n');
-    let currentLine = 0;
+  try {
+    const tempDir = await createTempDirectory();
+    const fileName = `${tempDir}/main.js`;
     
-    function readline() {
-      return currentLine < inputLines.length ? inputLines[currentLine++] : '';
-    }
+    const wrappedCode = `
+const input = ${JSON.stringify(input)};
+const inputLines = input.trim().split('\\n');
+let currentLine = 0;
+
+function readline() {
+  return currentLine < inputLines.length ? inputLines[currentLine++] : '';
+}
+
+let output = '';
+const originalConsoleLog = console.log;
+console.log = (...args) => {
+  output += args.join(' ') + '\\n';
+};
+
+try {
+  // Set timeout
+  const timeoutId = setTimeout(() => {
+    throw new Error('TIMEOUT: Code execution exceeded time limit');
+  }, ${EXECUTION_TIMEOUT});
+  
+  ${code}
+  
+  clearTimeout(timeoutId);
+  console.log = originalConsoleLog;
+  process.stdout.write(output.trim());
+} catch (error) {
+  console.log = originalConsoleLog;
+  if (error.message.includes('TIMEOUT')) {
+    throw new Error('Time limit exceeded');
+  }
+  throw new Error('Runtime Error: ' + error.message);
+}
+`;
     
-    let output = '';
-    const originalConsoleLog = console.log;
-    console.log = (...args) => {
-      output += args.join(' ') + '\\n';
-    };
+    await Deno.writeTextFile(fileName, wrappedCode);
+    
+    const runCmd = new Deno.Command("timeout", {
+      args: [`${Math.floor(EXECUTION_TIMEOUT / 1000)}s`, "node", "main.js"],
+      cwd: tempDir,
+      stdin: "null",
+      stdout: "piped",
+      stderr: "piped",
+    });
+    
+    const { code: runExitCode, stdout, stderr } = await runCmd.output();
     
     try {
-      // Set timeout
-      const timeoutId = setTimeout(() => {
-        throw new Error('TIMEOUT: Code execution exceeded time limit');
-      }, ${EXECUTION_TIMEOUT});
-      
-      ${code}
-      
-      clearTimeout(timeoutId);
-      return output.trim();
-    } catch (error) {
-      if (error.message.includes('TIMEOUT')) {
-        throw new Error('Time limit exceeded');
-      }
-      throw new Error('Runtime Error: ' + error.message);
-    }
-  `;
-  
-  try {
-    const func = new Function(wrappedCode);
-    const result = func();
-    return {
-      output: result || '',
-      execution_time: Date.now() - startTime
-    };
-  } catch (error) {
+      await Deno.remove(tempDir, { recursive: true });
+    } catch {}
+    
     const executionTime = Date.now() - startTime;
     
-    if (error.message.includes('Time limit exceeded')) {
+    if (runExitCode === 124) {
       return {
         output: '',
         error: 'Time limit exceeded',
@@ -681,10 +725,25 @@ async function executeJavaScript(code: string, input: string): Promise<{
       };
     }
     
+    if (runExitCode !== 0) {
+      const errorMessage = new TextDecoder().decode(stderr);
+      return {
+        output: '',
+        error: errorMessage.replace('Runtime Error: ', ''),
+        execution_time: executionTime
+      };
+    }
+    
+    return {
+      output: new TextDecoder().decode(stdout),
+      execution_time: executionTime
+    };
+    
+  } catch (error) {
     return {
       output: '',
-      error: error.message.replace('Runtime Error: ', ''),
-      execution_time: executionTime
+      error: `File write or access failed: ${error.message}`,
+      execution_time: Date.now() - startTime
     };
   }
 }
