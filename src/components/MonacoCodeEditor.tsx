@@ -1,3 +1,4 @@
+
 import { useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { Button } from '@/components/ui/button';
@@ -61,7 +62,6 @@ const MonacoCodeEditor = ({ problemId, contestId, onSubmit, testCases }: MonacoC
   ];
 
   function getDefaultCode(lang: string): string {
-    // ... keep existing code (default code templates)
     const templates = {
       python: `# Read input
 n = int(input())
@@ -124,7 +124,6 @@ rl.on('line', (input) => {
   };
 
   const handleEditorDidMount = (editor: any, monaco: any) => {
-    // ... keep existing code (editor setup and theme configuration)
     editorRef.current = editor;
     
     monaco.editor.defineTheme('examTheme', {
