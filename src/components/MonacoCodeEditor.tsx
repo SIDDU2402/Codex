@@ -181,11 +181,23 @@ rl.on('line', (input) => {
         }
       });
 
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw new Error(`Execution failed: ${error.message || 'Unknown error'}`);
+      }
+
+      if (!data) {
+        throw new Error('No response from execution service');
+      }
+
       const executionTime = Date.now() - startTime;
 
-      if (error) throw error;
+      if (!data.testResults || !Array.isArray(data.testResults) || data.testResults.length === 0) {
+        throw new Error('Invalid response: no test results');
+      }
 
       const result = data.testResults[0];
+      
       setExecutionOutput({
         output: result.actual || '',
         error: result.error,
@@ -205,10 +217,10 @@ rl.on('line', (input) => {
       }
 
     } catch (error) {
-      console.error('Execution error:', error);
+      console.error('Custom execution error:', error);
       setExecutionOutput({
         output: '',
-        error: 'Failed to execute code. Please try again.',
+        error: error.message || 'Failed to execute code. Please try again.',
         execution_time: 0,
         status: 'error'
       });
@@ -251,13 +263,24 @@ rl.on('line', (input) => {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw new Error(`Execution failed: ${error.message || 'Unknown error'}`);
+      }
+
+      if (!data) {
+        throw new Error('No response from execution service');
+      }
+
+      if (!data.testResults || !Array.isArray(data.testResults)) {
+        throw new Error('Invalid response: no test results');
+      }
 
       setTestResults(data.testResults.map((result: any, index: number) => ({
-        passed: result.passed,
-        input: sampleTestCases[index].input_data,
-        expected: sampleTestCases[index].expected_output,
-        actual: result.actual,
+        passed: result.passed || false,
+        input: sampleTestCases[index]?.input_data || '',
+        expected: sampleTestCases[index]?.expected_output || '',
+        actual: result.actual || '',
         error: result.error,
         compilation_error: result.compilation_error,
         execution_time: result.execution_time || 0
@@ -275,7 +298,7 @@ rl.on('line', (input) => {
 
     } catch (error) {
       console.error('Run error:', error);
-      toast.error('Failed to run code. Please try again.');
+      toast.error(error.message || 'Failed to run code. Please try again.');
     } finally {
       setIsRunning(false);
     }
@@ -306,7 +329,7 @@ rl.on('line', (input) => {
       if (submission?.id) {
         const evaluationResult = await evaluateSubmission.mutateAsync(submission.id);
         
-        if (evaluationResult.success) {
+        if (evaluationResult?.success) {
           const passedCount = evaluationResult.passedTestCases || 0;
           const totalCount = evaluationResult.totalTestCases || 0;
           
@@ -318,14 +341,16 @@ rl.on('line', (input) => {
             toast.info(`${passedCount}/${totalCount} test cases passed`);
           }
         } else {
-          toast.error('Evaluation failed: ' + evaluationResult.error);
+          toast.error('Evaluation failed: ' + (evaluationResult?.error || 'Unknown error'));
         }
+      } else {
+        throw new Error('Failed to create submission');
       }
       
       onSubmit?.();
     } catch (error) {
       console.error("Submission failed:", error);
-      toast.error("Failed to submit code. Please try again.");
+      toast.error(error.message || "Failed to submit code. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

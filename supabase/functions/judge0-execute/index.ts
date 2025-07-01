@@ -82,7 +82,8 @@ serve(async (req) => {
         execution_time: number;
         memory_used?: number;
         timeout?: boolean;
-      }>
+      }>,
+      compilation_error: undefined as string | undefined
     };
 
     // Execute code for each test case
@@ -92,6 +93,16 @@ serve(async (req) => {
       
       try {
         const result = await executeWithJudge0(code, languageId, testCase.input_data, rapidApiKey);
+        
+        // Check if result is valid
+        if (!result) {
+          throw new Error('Invalid response from Judge0 API');
+        }
+
+        // Ensure status exists
+        if (!result.status || typeof result.status.id !== 'number') {
+          throw new Error('Invalid status in Judge0 response');
+        }
         
         const passed = result.stdout?.trim() === testCase.expected_output.trim() && 
                       result.status.id === 3 && // Status 3 = Accepted
@@ -122,7 +133,7 @@ serve(async (req) => {
           input: testCase.input_data,
           expected: testCase.expected_output,
           actual: '',
-          error: error.message,
+          error: error.message || 'Unknown execution error',
           execution_time: 0
         });
         results.success = false;
@@ -145,7 +156,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message,
+        error: error.message || 'Unknown error occurred',
         testResults: []
       }),
       { 
@@ -163,47 +174,79 @@ async function executeWithJudge0(
   apiKey: string
 ): Promise<Judge0Response> {
   
-  // Encode code and input in base64
-  const encodedCode = btoa(code);
-  const encodedInput = input ? btoa(input) : '';
+  try {
+    // Encode code and input in base64
+    const encodedCode = btoa(code);
+    const encodedInput = input ? btoa(input) : '';
 
-  const submissionPayload = {
-    language_id: languageId,
-    source_code: encodedCode,
-    stdin: encodedInput,
-    base64_encoded: true,
-    wait: true, // Wait for execution to complete
-    wall_time_limit: 10, // 10 seconds max
-    memory_limit: 512000, // 512MB in KB
-  };
+    const submissionPayload = {
+      language_id: languageId,
+      source_code: encodedCode,
+      stdin: encodedInput,
+      base64_encoded: true,
+      wait: true, // Wait for execution to complete
+      wall_time_limit: 10, // 10 seconds max
+      memory_limit: 512000, // 512MB in KB
+    };
 
-  const response = await fetch('https://judge0-ce.p.rapidapi.com/submissions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com',
-      'X-RapidAPI-Key': apiKey,
-    },
-    body: JSON.stringify(submissionPayload),
-  });
+    console.log('Submitting to Judge0:', { language_id: languageId, has_input: !!input });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Judge0 API error: ${response.status} - ${errorText}`);
+    const response = await fetch('https://judge0-ce.p.rapidapi.com/submissions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com',
+        'X-RapidAPI-Key': apiKey,
+      },
+      body: JSON.stringify(submissionPayload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Judge0 API error response:', errorText);
+      throw new Error(`Judge0 API error: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    console.log('Judge0 raw response:', JSON.stringify(result, null, 2));
+    
+    // Validate response structure
+    if (!result || typeof result !== 'object') {
+      throw new Error('Invalid JSON response from Judge0');
+    }
+
+    // Ensure status exists with proper structure
+    if (!result.status || typeof result.status.id !== 'number') {
+      console.error('Invalid status in response:', result.status);
+      throw new Error('Invalid status in Judge0 response');
+    }
+    
+    // Decode base64 outputs safely
+    try {
+      if (result.stdout) {
+        result.stdout = atob(result.stdout);
+      }
+      if (result.stderr) {
+        result.stderr = atob(result.stderr);
+      }
+      if (result.compile_output) {
+        result.compile_output = atob(result.compile_output);
+      }
+    } catch (decodeError) {
+      console.error('Error decoding base64 outputs:', decodeError);
+      // Don't throw here, just log and continue with encoded values
+    }
+
+    console.log('Processed Judge0 response:', {
+      status: result.status,
+      stdout_length: result.stdout?.length || 0,
+      stderr_length: result.stderr?.length || 0,
+      compile_output_length: result.compile_output?.length || 0
+    });
+
+    return result;
+  } catch (error) {
+    console.error('Judge0 execution error:', error);
+    throw error;
   }
-
-  const result = await response.json();
-  
-  // Decode base64 outputs
-  if (result.stdout) {
-    result.stdout = atob(result.stdout);
-  }
-  if (result.stderr) {
-    result.stderr = atob(result.stderr);
-  }
-  if (result.compile_output) {
-    result.compile_output = atob(result.compile_output);
-  }
-
-  return result;
 }
