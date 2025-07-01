@@ -79,18 +79,42 @@ export const useUpdateContestStatus = () => {
 
   return useMutation({
     mutationFn: async ({ contestId, status }: { contestId: string; status: string }) => {
-      const { error } = await supabase
-        .from('contests')
-        .update({ status })
-        .eq('id', contestId);
+      console.log(`Updating contest ${contestId} to status: ${status}`);
+      
+      const updateData: any = { status };
+      
+      // If activating a contest, also update the start time to now
+      if (status === 'active') {
+        updateData.start_time = new Date().toISOString();
+      }
+      
+      // If completing a contest, also update the end time to now
+      if (status === 'completed') {
+        updateData.end_time = new Date().toISOString();
+      }
 
-      if (error) throw error;
+      const { data, error } = await supabase
+        .from('contests')
+        .update(updateData)
+        .eq('id', contestId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+      
+      console.log('Contest updated successfully:', data);
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['admin-contests'] });
-      toast.success('Contest status updated successfully!');
+      queryClient.invalidateQueries({ queryKey: ['contests'] });
+      toast.success(`Contest status updated to ${data.status} successfully!`);
     },
-    onError: () => {
+    onError: (error: any) => {
+      console.error('Update contest status error:', error);
       toast.error('Failed to update contest status');
     },
   });

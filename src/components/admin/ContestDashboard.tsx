@@ -41,8 +41,40 @@ const ContestDashboard = () => {
     }
   };
 
-  const handleStatusChange = async (contestId: string, newStatus: string) => {
+  const getNextStatus = (currentStatus: string) => {
+    switch (currentStatus) {
+      case 'upcoming':
+        return 'active';
+      case 'active':
+        return 'completed';
+      case 'completed':
+        return 'active';
+      case 'cancelled':
+        return 'upcoming';
+      default:
+        return 'active';
+    }
+  };
+
+  const getStatusActionText = (currentStatus: string) => {
+    switch (currentStatus) {
+      case 'upcoming':
+        return 'Activate';
+      case 'active':
+        return 'End Contest';
+      case 'completed':
+        return 'Reactivate';
+      case 'cancelled':
+        return 'Reactivate';
+      default:
+        return 'Activate';
+    }
+  };
+
+  const handleStatusChange = async (contestId: string, currentStatus: string) => {
     try {
+      const newStatus = getNextStatus(currentStatus);
+      console.log(`Updating contest ${contestId} from ${currentStatus} to ${newStatus}`);
       await updateContestStatus.mutateAsync({ contestId, status: newStatus });
     } catch (error) {
       console.error('Failed to update contest status:', error);
@@ -167,14 +199,14 @@ const ContestDashboard = () => {
                       <Button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleStatusChange(contest.id, contest.status === 'active' ? 'completed' : 'active');
+                          handleStatusChange(contest.id, contest.status);
                         }}
                         variant="outline"
                         size="sm"
                         className="border-slate-600 text-slate-300 hover:text-white"
                         disabled={updateContestStatus.isPending}
                       >
-                        {contest.status === 'active' ? 'End Contest' : 'Activate'}
+                        {updateContestStatus.isPending ? 'Updating...' : getStatusActionText(contest.status)}
                       </Button>
                     </div>
                   </CardContent>
