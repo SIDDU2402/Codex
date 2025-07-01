@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +8,8 @@ import {
   Users,
   Flag,
   HelpCircle,
-  AlertTriangle
+  AlertTriangle,
+  Maximize
 } from "lucide-react";
 import Timer from "@/components/Timer";
 import ProblemPanel from "@/components/ProblemPanel";
@@ -66,13 +66,32 @@ const SecureExamInterface = ({ contestId, onBack, onForceSubmit }: SecureExamInt
     
     if (!isCurrentlyFullscreen && violations === 0 && !warningShown) {
       setWarningShown(true);
-      toast.error("Warning: Exiting fullscreen is prohibited. Next violation will auto-submit your test!");
+      toast.error(
+        <div className="flex flex-col space-y-2">
+          <span>Warning: Exiting fullscreen is prohibited. Next violation will auto-submit your test!</span>
+          <Button 
+            onClick={enterFullscreen}
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white w-fit"
+          >
+            <Maximize className="h-3 w-3 mr-1" />
+            Re-enter Fullscreen
+          </Button>
+        </div>,
+        {
+          duration: 10000,
+          action: {
+            label: "Enter Fullscreen",
+            onClick: enterFullscreen
+          }
+        }
+      );
       setViolations(1);
     } else if (!isCurrentlyFullscreen && violations >= 1) {
       toast.error("Test auto-submitted due to security violations!");
       onForceSubmit();
     }
-  }, [violations, warningShown, onForceSubmit]);
+  }, [violations, warningShown, onForceSubmit, enterFullscreen]);
 
   const handleContextMenu = useCallback((e: MouseEvent) => {
     e.preventDefault();
@@ -199,9 +218,20 @@ const SecureExamInterface = ({ contestId, onBack, onForceSubmit }: SecureExamInt
     <div className="h-screen bg-slate-900 flex flex-col">
       {/* Security Warning Bar */}
       {!isFullscreen && (
-        <div className="bg-red-600 text-white px-4 py-2 text-center font-semibold">
-          <AlertTriangle className="inline h-4 w-4 mr-2" />
-          WARNING: You must stay in fullscreen mode. Violations: {violations}/2
+        <div className="bg-red-600 text-white px-4 py-2 text-center font-semibold flex items-center justify-center space-x-4">
+          <div className="flex items-center">
+            <AlertTriangle className="inline h-4 w-4 mr-2" />
+            WARNING: You must stay in fullscreen mode. Violations: {violations}/2
+          </div>
+          <Button 
+            onClick={enterFullscreen}
+            size="sm"
+            variant="outline"
+            className="border-white text-white hover:bg-white hover:text-red-600"
+          >
+            <Maximize className="h-3 w-3 mr-1" />
+            Enter Fullscreen
+          </Button>
         </div>
       )}
 

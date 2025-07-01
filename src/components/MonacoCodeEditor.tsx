@@ -270,9 +270,15 @@ rl.on('line', (input) => {
       const sampleTestCases = testCases.filter(tc => tc.is_sample);
       
       if (sampleTestCases.length === 0) {
-        toast.error('No sample test cases available for testing');
-        setIsRunning(false);
-        return;
+        // If no sample test cases, use first test case as sample for testing
+        const firstTestCase = testCases[0];
+        if (firstTestCase) {
+          sampleTestCases.push({ ...firstTestCase, is_sample: true });
+        } else {
+          toast.error('No test cases available for testing');
+          setIsRunning(false);
+          return;
+        }
       }
 
       console.log('Running sample tests:', sampleTestCases.length);
@@ -461,10 +467,10 @@ rl.on('line', (input) => {
             </Button>
             <Button
               onClick={handleRun}
-              disabled={isRunning || !testCases || testCases.length === 0}
+              disabled={isRunning || !code.trim()}
               variant="outline"
-              size="sm"
-              className="border-slate-600 text-slate-300 hover:text-white"
+              size="sm" 
+              className="border-slate-600 text-slate-300 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isRunning ? (
                 <>
