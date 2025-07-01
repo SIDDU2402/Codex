@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -21,7 +20,7 @@ interface Judge0Response {
   status: {
     id: number;
     description: string;
-  };
+  } | null;
   time: string | null;
   memory: number | null;
   token: string;
@@ -94,35 +93,38 @@ serve(async (req) => {
       try {
         const result = await executeWithJudge0(code, languageId, testCase.input_data, rapidApiKey);
         
-        // Check if result is valid
-        if (!result) {
-          throw new Error('Invalid response from Judge0 API');
-        }
-
-        // Ensure status exists
-        if (!result.status || typeof result.status.id !== 'number') {
-          throw new Error('Invalid status in Judge0 response');
-        }
+        // Safe status checking with defaults
+        const statusId = result?.status?.id ?? -1;
+        const statusDescription = result?.status?.description ?? 'Unknown status';
         
-        const passed = result.stdout?.trim() === testCase.expected_output.trim() && 
-                      result.status.id === 3 && // Status 3 = Accepted
-                      !result.stderr && 
-                      !result.compile_output;
+        // Status 3 = Accepted, Status 4 = Wrong Answer, Status 5 = Time Limit Exceeded, etc.
+        const isAccepted = statusId === 3;
+        const isCompilationError = statusId === 6;
+        const isRuntimeError = [4, 5, 7, 8, 9, 10, 11, 12].includes(statusId);
+        
+        const actualOutput = result?.stdout?.trim() || '';
+        const expectedOutput = testCase.expected_output.trim();
+        
+        const passed = isAccepted && 
+                      actualOutput === expectedOutput && 
+                      !result?.stderr && 
+                      !result?.compile_output;
         
         results.testResults.push({
           passed,
           input: testCase.input_data,
           expected: testCase.expected_output,
-          actual: result.stdout || '',
-          error: result.stderr || undefined,
-          compilation_error: result.compile_output || undefined,
-          execution_time: parseFloat(result.time || '0') * 1000, // Convert to ms
-          memory_used: result.memory ? Math.round(result.memory / 1024) : undefined, // Convert to KB
-          timeout: result.status.id === 5 // Status 5 = Time Limit Exceeded
+          actual: actualOutput,
+          error: result?.stderr || (isRuntimeError ? `Runtime Error (Status: ${statusDescription})` : undefined),
+          compilation_error: result?.compile_output || (isCompilationError ? `Compilation Error (Status: ${statusDescription})` : undefined),
+          execution_time: parseFloat(result?.time || '0') * 1000, // Convert to ms
+          memory_used: result?.memory ? Math.round(result.memory / 1024) : undefined, // Convert to KB
+          timeout: statusId === 5 // Status 5 = Time Limit Exceeded
         });
 
-        if (result.compile_output && !results.compilation_error) {
-          results.compilation_error = result.compile_output;
+        // Set compilation error if exists
+        if ((result?.compile_output || isCompilationError) && !results.compilation_error) {
+          results.compilation_error = result?.compile_output || `Compilation Error (Status: ${statusDescription})`;
           results.success = false;
         }
 
@@ -133,7 +135,7 @@ serve(async (req) => {
           input: testCase.input_data,
           expected: testCase.expected_output,
           actual: '',
-          error: error.message || 'Unknown execution error',
+          error: error instanceof Error ? error.message : 'Unknown execution error',
           execution_time: 0
         });
         results.success = false;
@@ -156,7 +158,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message || 'Unknown error occurred',
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
         testResults: []
       }),
       { 
@@ -176,8 +178,8 @@ async function executeWithJudge0(
   
   try {
     // Encode code and input in base64
-    const encodedCode = btoa(code);
-    const encodedInput = input ? btoa(input) : '';
+    const encodedCode = btoa(unescape(encodeURIComponent(code)));
+    const encodedInput = input ? btoa(unescape(encodeURIComponent(input))) : '';
 
     const submissionPayload = {
       language_id: languageId,
@@ -185,13 +187,22 @@ async function executeWithJudge0(
       stdin: encodedInput,
       base64_encoded: true,
       wait: true, // Wait for execution to complete
-      wall_time_limit: 10, // 10 seconds max
+      cpu_time_limit: 10, // 10 seconds max CPU time
+      wall_time_limit: 15, // 15 seconds max wall time
       memory_limit: 512000, // 512MB in KB
+      max_processes_and_or_threads: 60,
+      enable_per_process_and_thread_time_limit: false,
+      enable_per_process_and_thread_memory_limit: false,
+      max_file_size: 1024 // 1MB
     };
 
-    console.log('Submitting to Judge0:', { language_id: languageId, has_input: !!input });
+    console.log('Submitting to Judge0:', { 
+      language_id: languageId, 
+      has_input: !!input,
+      code_length: code.length 
+    });
 
-    const response = await fetch('https://judge0-ce.p.rapidapi.com/submissions', {
+    const response = await fetch('https://judge0-ce.p.rapidapi.com/submissions?base64_encoded=true&wait=true', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -207,46 +218,96 @@ async function executeWithJudge0(
       throw new Error(`Judge0 API error: ${response.status} - ${errorText}`);
     }
 
-    const result = await response.json();
-    console.log('Judge0 raw response:', JSON.stringify(result, null, 2));
-    
-    // Validate response structure
-    if (!result || typeof result !== 'object') {
-      throw new Error('Invalid JSON response from Judge0');
+    let result;
+    try {
+      result = await response.json();
+    } catch (parseError) {
+      console.error('Failed to parse Judge0 response as JSON:', parseError);
+      throw new Error('Invalid JSON response from Judge0 API');
     }
 
-    // Ensure status exists with proper structure
-    if (!result.status || typeof result.status.id !== 'number') {
-      console.error('Invalid status in response:', result.status);
-      throw new Error('Invalid status in Judge0 response');
-    }
+    console.log('Judge0 raw response:', JSON.stringify(result, null, 2));
     
-    // Decode base64 outputs safely
+    // Validate and sanitize response structure
+    if (!result || typeof result !== 'object') {
+      console.error('Invalid response structure:', result);
+      throw new Error('Invalid response structure from Judge0');
+    }
+
+    // Create a safe response object with defaults
+    const safeResult: Judge0Response = {
+      stdout: null,
+      stderr: null,
+      compile_output: null,
+      status: null,
+      time: null,
+      memory: null,
+      token: result.token || 'unknown'
+    };
+
+    // Safely decode base64 outputs
     try {
-      if (result.stdout) {
-        result.stdout = atob(result.stdout);
+      if (result.stdout && typeof result.stdout === 'string') {
+        safeResult.stdout = decodeURIComponent(escape(atob(result.stdout)));
       }
-      if (result.stderr) {
-        result.stderr = atob(result.stderr);
+      if (result.stderr && typeof result.stderr === 'string') {
+        safeResult.stderr = decodeURIComponent(escape(atob(result.stderr)));
       }
-      if (result.compile_output) {
-        result.compile_output = atob(result.compile_output);
+      if (result.compile_output && typeof result.compile_output === 'string') {
+        safeResult.compile_output = decodeURIComponent(escape(atob(result.compile_output)));
       }
     } catch (decodeError) {
       console.error('Error decoding base64 outputs:', decodeError);
-      // Don't throw here, just log and continue with encoded values
+      // Keep encoded values if decoding fails
+      safeResult.stdout = result.stdout || null;
+      safeResult.stderr = result.stderr || null;
+      safeResult.compile_output = result.compile_output || null;
     }
 
+    // Safely handle status object
+    if (result.status && typeof result.status === 'object') {
+      safeResult.status = {
+        id: typeof result.status.id === 'number' ? result.status.id : -1,
+        description: typeof result.status.description === 'string' ? result.status.description : 'Unknown'
+      };
+    } else {
+      // Default status if missing
+      safeResult.status = {
+        id: -1,
+        description: 'Status information unavailable'
+      };
+    }
+
+    // Handle time and memory safely
+    safeResult.time = typeof result.time === 'string' ? result.time : null;
+    safeResult.memory = typeof result.memory === 'number' ? result.memory : null;
+
     console.log('Processed Judge0 response:', {
-      status: result.status,
-      stdout_length: result.stdout?.length || 0,
-      stderr_length: result.stderr?.length || 0,
-      compile_output_length: result.compile_output?.length || 0
+      status: safeResult.status,
+      stdout_length: safeResult.stdout?.length || 0,
+      stderr_length: safeResult.stderr?.length || 0,
+      compile_output_length: safeResult.compile_output?.length || 0,
+      execution_time: safeResult.time,
+      memory_used: safeResult.memory
     });
 
-    return result;
+    return safeResult;
+
   } catch (error) {
     console.error('Judge0 execution error:', error);
-    throw error;
+    
+    // Return a safe error response
+    return {
+      stdout: null,
+      stderr: error instanceof Error ? error.message : 'Unknown execution error',
+      compile_output: null,
+      status: {
+        id: -1,
+        description: 'Execution failed'
+      },
+      time: null,
+      memory: null,
+      token: 'error'
+    };
   }
 }

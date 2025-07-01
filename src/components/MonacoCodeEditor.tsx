@@ -1,4 +1,3 @@
-
 import { useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { Button } from '@/components/ui/button';
@@ -154,7 +153,7 @@ rl.on('line', (input) => {
     });
   };
 
-  // Custom execution with user input using Judge0
+  // Enhanced custom execution with better error handling
   const handleCustomRun = async () => {
     if (!code.trim()) {
       toast.error('Please write some code before running');
@@ -190,47 +189,68 @@ rl.on('line', (input) => {
         throw new Error('No response from execution service');
       }
 
-      const executionTime = Date.now() - startTime;
+      console.log('Custom run response:', data);
 
       if (!data.testResults || !Array.isArray(data.testResults) || data.testResults.length === 0) {
-        throw new Error('Invalid response: no test results');
+        throw new Error('Invalid response: no test results received');
       }
 
       const result = data.testResults[0];
+      
+      // Handle different execution outcomes
+      let status: 'success' | 'error' | 'timeout' = 'success';
+      let errorMessage = '';
+
+      if (result.compilation_error) {
+        status = 'error';
+        errorMessage = result.compilation_error;
+      } else if (result.error) {
+        status = 'error';
+        errorMessage = result.error;
+      } else if (result.timeout) {
+        status = 'timeout';
+        errorMessage = 'Time limit exceeded';
+      }
+
+      const executionTime = Date.now() - startTime;
       
       setExecutionOutput({
         output: result.actual || '',
         error: result.error,
         compilation_error: result.compilation_error,
         execution_time: result.execution_time || executionTime,
-        status: result.compilation_error || result.error || result.timeout ? 'error' : 'success'
+        status
       });
 
+      // Show appropriate toast messages
       if (result.compilation_error) {
-        toast.error('Compilation Error');
+        toast.error('Compilation Error - Check your syntax');
       } else if (result.error) {
-        toast.error('Runtime Error');
+        toast.error('Runtime Error - Check your logic');
       } else if (result.timeout) {
-        toast.error('Time Limit Exceeded');
+        toast.error('Time Limit Exceeded - Optimize your solution');
       } else {
         toast.success('Code executed successfully');
       }
 
     } catch (error) {
       console.error('Custom execution error:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Failed to execute code. Please try again.';
+      
       setExecutionOutput({
         output: '',
-        error: error.message || 'Failed to execute code. Please try again.',
+        error: errorMsg,
         execution_time: 0,
         status: 'error'
       });
-      toast.error('Execution failed');
+      
+      toast.error('Execution failed: ' + errorMsg);
     } finally {
       setIsRunning(false);
     }
   };
 
-  // Run against sample test cases using Judge0
+  // Enhanced sample test case execution
   const handleRun = async () => {
     if (!testCases || testCases.length === 0) {
       toast.error('No test cases available for this problem');
@@ -255,6 +275,8 @@ rl.on('line', (input) => {
         return;
       }
 
+      console.log('Running sample tests:', sampleTestCases.length);
+
       const { data, error } = await supabase.functions.invoke('judge0-execute', {
         body: {
           code,
@@ -272,11 +294,14 @@ rl.on('line', (input) => {
         throw new Error('No response from execution service');
       }
 
+      console.log('Sample test response:', data);
+
       if (!data.testResults || !Array.isArray(data.testResults)) {
-        throw new Error('Invalid response: no test results');
+        throw new Error('Invalid response: no test results received');
       }
 
-      setTestResults(data.testResults.map((result: any, index: number) => ({
+      // Process and display results
+      const processedResults = data.testResults.map((result: any, index: number) => ({
         passed: result.passed || false,
         input: sampleTestCases[index]?.input_data || '',
         expected: sampleTestCases[index]?.expected_output || '',
@@ -284,27 +309,34 @@ rl.on('line', (input) => {
         error: result.error,
         compilation_error: result.compilation_error,
         execution_time: result.execution_time || 0
-      })));
+      }));
 
-      const passedCount = data.testResults.filter((r: any) => r.passed).length;
+      setTestResults(processedResults);
+
+      const passedCount = processedResults.filter(r => r.passed).length;
+      const totalCount = processedResults.length;
       
+      // Show detailed feedback
       if (data.compilation_error) {
-        toast.error('Compilation Error');
-      } else if (passedCount === data.testResults.length) {
-        toast.success(`All ${passedCount} sample test cases passed!`);
+        toast.error('Compilation Error - Fix syntax errors before running');
+      } else if (passedCount === totalCount) {
+        toast.success(`Perfect! All ${passedCount} sample test cases passed!`);
+      } else if (passedCount > 0) {
+        toast.info(`${passedCount}/${totalCount} sample test cases passed - Review failed cases`);
       } else {
-        toast.error(`${passedCount}/${data.testResults.length} sample test cases passed`);
+        toast.error(`0/${totalCount} sample test cases passed - Check your logic`);
       }
 
     } catch (error) {
-      console.error('Run error:', error);
-      toast.error(error.message || 'Failed to run code. Please try again.');
+      console.error('Run sample tests error:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Failed to run tests. Please try again.';
+      toast.error('Execution failed: ' + errorMsg);
     } finally {
       setIsRunning(false);
     }
   };
 
-  // Full evaluation with all test cases
+  // Enhanced submission with better feedback
   const handleSubmit = async () => {
     if (!problemId || !contestId) {
       toast.error("Problem ID and Contest ID are required for submission");
@@ -319,6 +351,8 @@ rl.on('line', (input) => {
     setIsSubmitting(true);
 
     try {
+      console.log('Submitting code for evaluation...');
+      
       const submission = await submitCode.mutateAsync({
         problemId,
         contestId,
@@ -326,31 +360,56 @@ rl.on('line', (input) => {
         language,
       });
       
-      if (submission?.id) {
-        const evaluationResult = await evaluateSubmission.mutateAsync(submission.id);
+      if (!submission?.id) {
+        throw new Error('Failed to create submission - no submission ID received');
+      }
+
+      console.log('Submission created, starting evaluation:', submission.id);
+      
+      const evaluationResult = await evaluateSubmission.mutateAsync(submission.id);
+      
+      console.log('Evaluation result:', evaluationResult);
+      
+      if (evaluationResult?.success) {
+        const passedCount = evaluationResult.passedTestCases || 0;
+        const totalCount = evaluationResult.totalTestCases || 0;
+        const score = evaluationResult.score || 0;
         
-        if (evaluationResult?.success) {
-          const passedCount = evaluationResult.passedTestCases || 0;
-          const totalCount = evaluationResult.totalTestCases || 0;
-          
-          toast.success(`Submission completed! Score: ${evaluationResult.score || 0} points`);
-          
-          if (passedCount === totalCount) {
-            toast.success(`Perfect! All ${totalCount} test cases passed!`);
-          } else {
-            toast.info(`${passedCount}/${totalCount} test cases passed`);
-          }
+        // Provide detailed feedback based on results
+        if (evaluationResult.hasCompilationError) {
+          toast.error('Compilation Error - Please fix syntax errors');
+        } else if (passedCount === totalCount) {
+          toast.success(`🎉 Perfect! All ${totalCount} test cases passed! Score: ${score} points`);
+        } else if (passedCount > 0) {
+          toast.info(`${passedCount}/${totalCount} test cases passed. Score: ${score} points`);
         } else {
-          toast.error('Evaluation failed: ' + (evaluationResult?.error || 'Unknown error'));
+          toast.error(`Solution failed all test cases. Score: ${score} points`);
+        }
+        
+        // Additional status-specific messages
+        switch (evaluationResult.status) {
+          case 'accepted':
+            toast.success('🏆 Solution Accepted!');
+            break;
+          case 'partial_correct':
+            toast.info('Partial solution - Some test cases failed');
+            break;
+          case 'compilation_error':
+            toast.error('Compilation error - Check your syntax');
+            break;
+          case 'wrong_answer':
+            toast.error('Wrong answer - Review your logic');
+            break;
         }
       } else {
-        throw new Error('Failed to create submission');
+        throw new Error('Evaluation failed: ' + (evaluationResult?.error || 'Unknown error'));
       }
       
       onSubmit?.();
     } catch (error) {
       console.error("Submission failed:", error);
-      toast.error(error.message || "Failed to submit code. Please try again.");
+      const errorMsg = error instanceof Error ? error.message : "Failed to submit code. Please try again.";
+      toast.error(errorMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -510,7 +569,7 @@ rl.on('line', (input) => {
         />
       </div>
 
-      {/* Output Panel */}
+      {/* Enhanced Output Panel */}
       {(executionOutput || testResults.length > 0) && (
         <div className="border-t border-slate-700 max-h-80 overflow-y-auto bg-slate-900">
           {/* Custom execution output */}
@@ -522,6 +581,8 @@ rl.on('line', (input) => {
                     <div className="flex items-center">
                       {executionOutput.status === 'success' ? (
                         <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                      ) : executionOutput.status === 'timeout' ? (
+                        <Clock className="h-4 w-4 text-yellow-500 mr-2" />
                       ) : (
                         <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
                       )}
@@ -616,13 +677,13 @@ rl.on('line', (input) => {
                         {result.compilation_error && (
                           <div>
                             <span className="text-slate-400">Compilation Error: </span>
-                            <span className="text-red-400 font-mono">{result.compilation_error}</span>
+                            <span className="text-red-400 font-mono text-xs">{result.compilation_error}</span>
                           </div>
                         )}
                         {result.error && (
                           <div>
                             <span className="text-slate-400">Runtime Error: </span>
-                            <span className="text-red-400 font-mono">{result.error}</span>
+                            <span className="text-red-400 font-mono text-xs">{result.error}</span>
                           </div>
                         )}
                       </div>
