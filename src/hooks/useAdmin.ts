@@ -43,7 +43,7 @@ export const useCreateContest = () => {
         end_time: contestData.end_time,
         duration_minutes: parseInt(contestData.duration_minutes),
         max_participants: contestData.max_participants ? parseInt(contestData.max_participants) : null,
-        status: contestData.status || 'upcoming',
+        status: contestData.status || 'draft',
         created_by: user.id,
       };
 
@@ -88,8 +88,8 @@ export const useUpdateContestStatus = () => {
         updateData.start_time = new Date().toISOString();
       }
       
-      // If completing a contest, also update the end time to now
-      if (status === 'completed') {
+      // If ending a contest, also update the end time to now
+      if (status === 'ended') {
         updateData.end_time = new Date().toISOString();
       }
 
@@ -128,7 +128,7 @@ export const useReactivateContest = () => {
       const { error } = await supabase
         .from('contests')
         .update({ 
-          status: 'upcoming',
+          status: 'draft',
           start_time: startDate,
           end_time: endDate
         })

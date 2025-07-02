@@ -30,9 +30,11 @@ const ContestDashboard = () => {
     switch (status) {
       case 'active':
         return 'bg-green-600';
-      case 'upcoming':
+      case 'draft':
         return 'bg-blue-600';
       case 'completed':
+        return 'bg-gray-600';
+      case 'ended':
         return 'bg-gray-600';
       case 'cancelled':
         return 'bg-red-600';
@@ -43,14 +45,14 @@ const ContestDashboard = () => {
 
   const getNextStatus = (currentStatus: string) => {
     switch (currentStatus) {
-      case 'upcoming':
+      case 'draft':
         return 'active';
       case 'active':
-        return 'completed';
-      case 'completed':
+        return 'ended';
+      case 'ended':
         return 'active';
       case 'cancelled':
-        return 'upcoming';
+        return 'draft';
       default:
         return 'active';
     }
@@ -58,11 +60,11 @@ const ContestDashboard = () => {
 
   const getStatusActionText = (currentStatus: string) => {
     switch (currentStatus) {
-      case 'upcoming':
+      case 'draft':
         return 'Activate';
       case 'active':
         return 'End Contest';
-      case 'completed':
+      case 'ended':
         return 'Reactivate';
       case 'cancelled':
         return 'Reactivate';
