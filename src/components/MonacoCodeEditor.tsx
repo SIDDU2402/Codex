@@ -267,13 +267,13 @@ rl.on('line', (input) => {
     setExecutionOutput(null);
 
     try {
-      const sampleTestCases = testCases.filter(tc => tc.is_sample);
+      let sampleTestCases = testCases.filter(tc => tc.is_sample);
       
       if (sampleTestCases.length === 0) {
         // If no sample test cases, use first test case as sample for testing
         const firstTestCase = testCases[0];
         if (firstTestCase) {
-          sampleTestCases.push({ ...firstTestCase, is_sample: true });
+          sampleTestCases = [{ ...firstTestCase, is_sample: true }];
         } else {
           toast.error('No test cases available for testing');
           setIsRunning(false);
