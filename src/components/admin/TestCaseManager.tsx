@@ -30,7 +30,7 @@ const TestCaseManager = ({ problemId }: TestCaseManagerProps) => {
   const handleCreateTestCase = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!testCaseForm.input_data.trim()) {
+    if (!testCaseForm.input_data) {
       toast({
         title: "Validation Error",
         description: "Input data is required.",
@@ -39,7 +39,7 @@ const TestCaseManager = ({ problemId }: TestCaseManagerProps) => {
       return;
     }
 
-    if (!testCaseForm.expected_output.trim()) {
+    if (!testCaseForm.expected_output) {
       toast({
         title: "Validation Error",
         description: "Expected output is required.",
@@ -51,8 +51,8 @@ const TestCaseManager = ({ problemId }: TestCaseManagerProps) => {
     try {
       await createTestCase.mutateAsync({
         problem_id: problemId,
-        input_data: testCaseForm.input_data.trim(),
-        expected_output: testCaseForm.expected_output.trim(),
+        input_data: testCaseForm.input_data,
+        expected_output: testCaseForm.expected_output,
         is_sample: testCaseForm.is_sample,
         points: testCaseForm.points,
       });

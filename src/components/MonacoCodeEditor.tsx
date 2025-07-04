@@ -28,6 +28,7 @@ const MonacoCodeEditor = ({ problemId, contestId, onSubmit, testCases }: MonacoC
   const editorRef = useRef<any>(null);
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState('python');
+  const [codeStorage, setCodeStorage] = useState<Record<string, Record<string, string>>>({});
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [customInput, setCustomInput] = useState('');
@@ -112,11 +113,45 @@ rl.on('line', (input) => {
     return templates[lang as keyof typeof templates] || templates.python;
   }
 
+  // Load saved code or default template when problem or language changes
   useEffect(() => {
-    setCode(getDefaultCode(language));
-  }, [language]);
+    if (problemId) {
+      const savedCode = codeStorage[problemId]?.[language];
+      if (savedCode) {
+        setCode(savedCode);
+      } else {
+        setCode(getDefaultCode(language));
+      }
+    } else {
+      setCode(getDefaultCode(language));
+    }
+  }, [language, problemId, codeStorage]);
+
+  // Save code when it changes
+  useEffect(() => {
+    if (problemId && code) {
+      setCodeStorage(prev => ({
+        ...prev,
+        [problemId]: {
+          ...prev[problemId],
+          [language]: code
+        }
+      }));
+    }
+  }, [code, problemId, language]);
 
   const handleLanguageChange = (newLanguage: string) => {
+    // Save current code before switching language
+    if (problemId && code) {
+      setCodeStorage(prev => ({
+        ...prev,
+        [problemId]: {
+          ...prev[problemId],
+          [language]: code
+        }
+      }));
+    }
+    
     setLanguage(newLanguage);
     setExecutionOutput(null);
     setTestResults([]);
