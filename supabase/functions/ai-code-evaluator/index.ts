@@ -40,10 +40,10 @@ serve(async (req) => {
 
   try {
     const { code, language, testCases }: EvaluationRequest = await req.json();
-    const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
     
-    if (!openAIApiKey) {
-      throw new Error('OpenAI API key not configured');
+    if (!geminiApiKey) {
+      throw new Error('Gemini API key not configured');
     }
 
     console.log(`[${new Date().toISOString()}] AI Code Evaluation - ${language} with ${testCases.length} test cases`);
@@ -68,7 +68,7 @@ serve(async (req) => {
     };
 
     // First, check for compilation errors
-    const compilationCheck = await checkCompilation(code, language, openAIApiKey);
+    const compilationCheck = await checkCompilation(code, language, geminiApiKey);
     if (compilationCheck.hasError) {
       results.compilation_error = compilationCheck.error;
       results.success = false;
@@ -94,13 +94,13 @@ serve(async (req) => {
       );
     }
 
-    // Evaluate each test case using AI
+    // Evaluate each test case using Gemini AI
     for (let i = 0; i < testCases.length; i++) {
       const testCase = testCases[i];
       console.log(`Evaluating test case ${i + 1}/${testCases.length}`);
       
       try {
-        const result = await evaluateTestCase(code, language, testCase, openAIApiKey);
+        const result = await evaluateTestCase(code, language, testCase, geminiApiKey);
         results.testResults.push(result);
       } catch (error) {
         console.error(`Test case ${i + 1} evaluation error:`, error);
@@ -160,26 +160,30 @@ Instructions:
 Response format: Either "NO_ERRORS" or a specific error message.`;
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.1,
-        max_tokens: 500,
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 500,
+        }
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
+      throw new Error(`Gemini API error: ${response.status}`);
     }
 
     const data = await response.json();
-    const result = data.choices[0].message.content.trim();
+    const result = data.candidates[0].content.parts[0].text.trim();
     
     return {
       hasError: result !== 'NO_ERRORS',
@@ -235,26 +239,30 @@ Response format (JSON):
 Important: Return only valid JSON, no other text.`;
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.1,
-        max_tokens: 1000,
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 1000,
+        }
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
+      throw new Error(`Gemini API error: ${response.status}`);
     }
 
     const data = await response.json();
-    const resultText = data.choices[0].message.content.trim();
+    const resultText = data.candidates[0].content.parts[0].text.trim();
     
     let aiResult;
     try {

@@ -14,10 +14,10 @@ serve(async (req) => {
 
   try {
     const { submissionId } = await req.json();
-    const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
     
-    if (!openAIApiKey) {
-      throw new Error('OpenAI API key not configured');
+    if (!geminiApiKey) {
+      throw new Error('Gemini API key not configured');
     }
     
     const supabaseClient = createClient(
@@ -55,7 +55,7 @@ serve(async (req) => {
 
     console.log(`AI evaluating submission ${submissionId} with ${testCases.length} test cases`);
 
-    // Use the AI code evaluator
+    // Use the AI code evaluator with Gemini
     const { data: evaluationResult, error: evaluationError } = await supabaseClient.functions.invoke('ai-code-evaluator', {
       body: {
         code: submission.code,

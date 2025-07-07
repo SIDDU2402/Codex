@@ -543,7 +543,7 @@ rl.on('line', (input) => {
 
         {/* Keyboard shortcuts info */}
         <div className="mt-2 text-xs text-slate-400">
-          Shortcuts: Ctrl+Enter (Run) • Ctrl+Shift+Enter (Submit) • Powered by OpenAI GPT-4
+          Shortcuts: Ctrl+Enter (Run) • Ctrl+Shift+Enter (Submit) • Powered by Google Gemini AI
         </div>
       </div>
 
@@ -635,7 +635,7 @@ rl.on('line', (input) => {
                     </Badge>
                     <Badge variant="outline" className="ml-2 text-xs border-blue-600 text-blue-400">
                       <Brain className="h-3 w-3 mr-1" />
-                      OpenAI
+                      Gemini
                     </Badge>
                   </CardTitle>
                 </CardHeader>
@@ -681,7 +681,7 @@ rl.on('line', (input) => {
                     </Badge>
                     <Badge variant="outline" className="ml-2 text-xs border-blue-600 text-blue-400">
                       <Brain className="h-3 w-3 mr-1" />
-                      OpenAI
+                      Gemini
                     </Badge>
                   </CardTitle>
                 </CardHeader>
