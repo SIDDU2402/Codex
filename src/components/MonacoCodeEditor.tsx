@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Play, Send, Clock, CheckCircle, XCircle, Loader, AlertCircle, Code } from 'lucide-react';
+import { Play, Send, Clock, CheckCircle, XCircle, Loader, AlertCircle, Code, Brain } from 'lucide-react';
 import { useSubmitCode } from '@/hooks/useContests';
 import { useEvaluateSubmission } from '@/hooks/useEvaluation';
 import { useState } from 'react';
@@ -188,7 +188,7 @@ rl.on('line', (input) => {
     });
   };
 
-  // Enhanced custom execution with better error handling
+  // Enhanced custom execution with AI evaluation
   const handleCustomRun = async () => {
     if (!code.trim()) {
       toast.error('Please write some code before running');
@@ -201,7 +201,7 @@ rl.on('line', (input) => {
     try {
       const startTime = Date.now();
       
-      const { data, error } = await supabase.functions.invoke('judge0-execute', {
+      const { data, error } = await supabase.functions.invoke('ai-code-evaluator', {
         body: {
           code,
           language,
@@ -217,14 +217,14 @@ rl.on('line', (input) => {
 
       if (error) {
         console.error('Supabase function error:', error);
-        throw new Error(`Execution failed: ${error.message || 'Unknown error'}`);
+        throw new Error(`AI evaluation failed: ${error.message || 'Unknown error'}`);
       }
 
       if (!data) {
-        throw new Error('No response from execution service');
+        throw new Error('No response from AI evaluation service');
       }
 
-      console.log('Custom run response:', data);
+      console.log('Custom AI evaluation response:', data);
 
       if (!data.testResults || !Array.isArray(data.testResults) || data.testResults.length === 0) {
         throw new Error('Invalid response: no test results received');
@@ -265,12 +265,12 @@ rl.on('line', (input) => {
       } else if (result.timeout) {
         toast.error('Time Limit Exceeded - Optimize your solution');
       } else {
-        toast.success('Code executed successfully');
+        toast.success('Code evaluated successfully by AI');
       }
 
     } catch (error) {
-      console.error('Custom execution error:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Failed to execute code. Please try again.';
+      console.error('Custom AI evaluation error:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Failed to evaluate code. Please try again.';
       
       setExecutionOutput({
         output: '',
@@ -279,13 +279,13 @@ rl.on('line', (input) => {
         status: 'error'
       });
       
-      toast.error('Execution failed: ' + errorMsg);
+      toast.error('AI evaluation failed: ' + errorMsg);
     } finally {
       setIsRunning(false);
     }
   };
 
-  // Enhanced sample test case execution
+  // Enhanced sample test case execution with AI
   const handleRun = async () => {
     if (!testCases || testCases.length === 0) {
       toast.error('No test cases available for this problem');
@@ -316,9 +316,9 @@ rl.on('line', (input) => {
         }
       }
 
-      console.log('Running sample tests:', sampleTestCases.length);
+      console.log('Running AI evaluation on sample tests:', sampleTestCases.length);
 
-      const { data, error } = await supabase.functions.invoke('judge0-execute', {
+      const { data, error } = await supabase.functions.invoke('ai-code-evaluator', {
         body: {
           code,
           language,
@@ -328,14 +328,14 @@ rl.on('line', (input) => {
 
       if (error) {
         console.error('Supabase function error:', error);
-        throw new Error(`Execution failed: ${error.message || 'Unknown error'}`);
+        throw new Error(`AI evaluation failed: ${error.message || 'Unknown error'}`);
       }
 
       if (!data) {
-        throw new Error('No response from execution service');
+        throw new Error('No response from AI evaluation service');
       }
 
-      console.log('Sample test response:', data);
+      console.log('Sample test AI response:', data);
 
       if (!data.testResults || !Array.isArray(data.testResults)) {
         throw new Error('Invalid response: no test results received');
@@ -361,17 +361,17 @@ rl.on('line', (input) => {
       if (data.compilation_error) {
         toast.error('Compilation Error - Fix syntax errors before running');
       } else if (passedCount === totalCount) {
-        toast.success(`Perfect! All ${passedCount} sample test cases passed!`);
+        toast.success(`Perfect! All ${passedCount} sample test cases passed! (AI Evaluated)`);
       } else if (passedCount > 0) {
-        toast.info(`${passedCount}/${totalCount} sample test cases passed - Review failed cases`);
+        toast.info(`${passedCount}/${totalCount} sample test cases passed - Review failed cases (AI Evaluated)`);
       } else {
-        toast.error(`0/${totalCount} sample test cases passed - Check your logic`);
+        toast.error(`0/${totalCount} sample test cases passed - Check your logic (AI Evaluated)`);
       }
 
     } catch (error) {
-      console.error('Run sample tests error:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Failed to run tests. Please try again.';
-      toast.error('Execution failed: ' + errorMsg);
+      console.error('Run AI sample tests error:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Failed to run AI tests. Please try again.';
+      toast.error('AI evaluation failed: ' + errorMsg);
     } finally {
       setIsRunning(false);
     }
@@ -471,8 +471,9 @@ rl.on('line', (input) => {
             <Badge variant="outline" className="border-slate-600 text-slate-300">
               {currentLanguage?.label}
             </Badge>
-            <Badge variant="outline" className="border-green-600 text-green-400">
-              Judge0 Powered
+            <Badge variant="outline" className="border-blue-600 text-blue-400">
+              <Brain className="h-3 w-3 mr-1" />
+              AI Powered
             </Badge>
           </div>
           <Select value={language} onValueChange={handleLanguageChange}>
@@ -510,7 +511,7 @@ rl.on('line', (input) => {
               {isRunning ? (
                 <>
                   <Loader className="h-4 w-4 mr-2 animate-spin" />
-                  Running...
+                  AI Evaluating...
                 </>
               ) : (
                 <>
@@ -542,7 +543,7 @@ rl.on('line', (input) => {
 
         {/* Keyboard shortcuts info */}
         <div className="mt-2 text-xs text-slate-400">
-          Shortcuts: Ctrl+Enter (Run) • Ctrl+Shift+Enter (Submit) • Powered by Judge0 API
+          Shortcuts: Ctrl+Enter (Run) • Ctrl+Shift+Enter (Submit) • Powered by OpenAI GPT-4
         </div>
       </div>
 
@@ -566,7 +567,7 @@ rl.on('line', (input) => {
               {isRunning ? (
                 <>
                   <Loader className="h-4 w-4 mr-2 animate-spin" />
-                  Running...
+                  AI Evaluating...
                 </>
               ) : (
                 <>
@@ -627,13 +628,14 @@ rl.on('line', (input) => {
                       ) : (
                         <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
                       )}
-                      Custom Execution Result
+                      AI Evaluation Result
                     </div>
                     <Badge className="ml-2 text-xs">
                       {executionOutput.execution_time}ms
                     </Badge>
-                    <Badge variant="outline" className="ml-2 text-xs border-green-600 text-green-400">
-                      Judge0
+                    <Badge variant="outline" className="ml-2 text-xs border-blue-600 text-blue-400">
+                      <Brain className="h-3 w-3 mr-1" />
+                      OpenAI
                     </Badge>
                   </CardTitle>
                 </CardHeader>
@@ -677,8 +679,9 @@ rl.on('line', (input) => {
                     <Badge className={`ml-2 ${testResults.every(r => r.passed) ? 'bg-green-600' : 'bg-red-600'} text-white text-xs`}>
                       {testResults.filter(r => r.passed).length}/{testResults.length} Passed
                     </Badge>
-                    <Badge variant="outline" className="ml-2 text-xs border-green-600 text-green-400">
-                      Judge0
+                    <Badge variant="outline" className="ml-2 text-xs border-blue-600 text-blue-400">
+                      <Brain className="h-3 w-3 mr-1" />
+                      OpenAI
                     </Badge>
                   </CardTitle>
                 </CardHeader>
