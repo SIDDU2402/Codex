@@ -68,8 +68,10 @@ serve(async (req) => {
     };
 
     // First, check for compilation errors
+    console.log('Checking compilation...');
     const compilationCheck = await checkCompilation(code, language, geminiApiKey);
     if (compilationCheck.hasError) {
+      console.log('Compilation error found:', compilationCheck.error);
       results.compilation_error = compilationCheck.error;
       results.success = false;
       
@@ -94,6 +96,8 @@ serve(async (req) => {
       );
     }
 
+    console.log('Compilation successful, evaluating test cases...');
+
     // Evaluate each test case using Gemini AI
     for (let i = 0; i < testCases.length; i++) {
       const testCase = testCases[i];
@@ -102,6 +106,7 @@ serve(async (req) => {
       try {
         const result = await evaluateTestCase(code, language, testCase, geminiApiKey);
         results.testResults.push(result);
+        console.log(`Test case ${i + 1} result: ${result.passed ? 'PASSED' : 'FAILED'}`);
       } catch (error) {
         console.error(`Test case ${i + 1} evaluation error:`, error);
         results.testResults.push({
@@ -116,7 +121,8 @@ serve(async (req) => {
       }
     }
 
-    console.log(`AI evaluation completed. Success: ${results.success}, Passed: ${results.testResults.filter(r => r.passed).length}/${results.testResults.length}`);
+    const passedCount = results.testResults.filter(r => r.passed).length;
+    console.log(`AI evaluation completed. Success: ${results.success}, Passed: ${passedCount}/${results.testResults.length}`);
 
     return new Response(
       JSON.stringify(results),
@@ -154,7 +160,7 @@ ${code}
 Instructions:
 1. Check for syntax errors, missing imports, undefined variables, and other compilation issues
 2. Consider the language-specific rules and conventions
-3. If there are no compilation errors, respond with "NO_ERRORS"
+3. If there are no compilation errors, respond with exactly "NO_ERRORS"
 4. If there are compilation errors, provide a clear, concise error message
 
 Response format: Either "NO_ERRORS" or a specific error message.`;
@@ -179,10 +185,18 @@ Response format: Either "NO_ERRORS" or a specific error message.`;
     });
 
     if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status}`);
+      const errorText = await response.text();
+      console.error('Gemini API error response:', errorText);
+      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
+    
+    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
+      console.error('Invalid Gemini API response structure:', JSON.stringify(data));
+      throw new Error('Invalid response structure from Gemini API');
+    }
+    
     const result = data.candidates[0].content.parts[0].text.trim();
     
     return {
@@ -191,6 +205,7 @@ Response format: Either "NO_ERRORS" or a specific error message.`;
     };
   } catch (error) {
     console.error('Compilation check error:', error);
+    // Return no error to allow execution to continue if compilation check fails
     return {
       hasError: false,
       error: undefined
@@ -223,20 +238,18 @@ ${testCase.expected_output}
 Instructions:
 1. Trace through the code logic step by step
 2. Determine what the code would output for the given input
-3. Compare with the expected output
+3. Compare with the expected output exactly (including whitespace and formatting)
 4. Be very precise about whitespace, newlines, and formatting
 5. Consider edge cases and potential runtime errors
 
-Response format (JSON):
+Response format (JSON only, no other text):
 {
   "actual_output": "the exact output the code would produce",
   "passes": true/false,
   "reasoning": "brief explanation of your evaluation",
   "has_runtime_error": true/false,
   "runtime_error": "error message if any"
-}
-
-Important: Return only valid JSON, no other text.`;
+}`;
 
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
@@ -258,17 +271,33 @@ Important: Return only valid JSON, no other text.`;
     });
 
     if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status}`);
+      const errorText = await response.text();
+      console.error('Gemini API error response:', errorText);
+      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
+    
+    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
+      console.error('Invalid Gemini API response structure:', JSON.stringify(data));
+      throw new Error('Invalid response structure from Gemini API');
+    }
+    
     const resultText = data.candidates[0].content.parts[0].text.trim();
+    console.log('Raw Gemini response:', resultText);
+    
+    // Try to extract JSON from the response
+    let jsonMatch = resultText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      // If no JSON found, try to parse the entire response
+      jsonMatch = [resultText];
+    }
     
     let aiResult;
     try {
-      aiResult = JSON.parse(resultText);
+      aiResult = JSON.parse(jsonMatch[0]);
     } catch (parseError) {
-      console.error('Failed to parse AI response:', resultText);
+      console.error('Failed to parse AI response as JSON:', resultText);
       throw new Error('AI returned invalid JSON response');
     }
 

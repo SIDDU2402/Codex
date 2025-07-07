@@ -25,6 +25,8 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    console.log(`Starting evaluation for submission ${submissionId}`);
+
     // Get submission details
     const { data: submission, error: submissionError } = await supabaseClient
       .from('submissions')
@@ -33,6 +35,7 @@ serve(async (req) => {
       .single();
 
     if (submissionError || !submission) {
+      console.error('Submission not found:', submissionError);
       throw new Error('Submission not found');
     }
 
@@ -44,6 +47,7 @@ serve(async (req) => {
       .order('created_at', { ascending: true });
 
     if (testCasesError || !testCases) {
+      console.error('Test cases not found:', testCasesError);
       throw new Error('Test cases not found');
     }
 
@@ -65,12 +69,16 @@ serve(async (req) => {
     });
 
     if (evaluationError) {
+      console.error('AI evaluation error:', evaluationError);
       throw new Error(`AI evaluation failed: ${evaluationError.message}`);
     }
 
     if (!evaluationResult || !evaluationResult.testResults) {
+      console.error('Invalid AI evaluation response:', evaluationResult);
       throw new Error('Invalid AI evaluation response');
     }
+
+    console.log('AI evaluation result:', evaluationResult);
 
     let totalScore = 0;
     let passedTestCases = 0;
