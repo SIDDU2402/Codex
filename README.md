@@ -1,73 +1,84 @@
-# Welcome to your Lovable project
+# Codex
 
-## Project info
+**A Modern Coding Contest Platform**
 
-**URL**: https://lovable.dev/projects/5fc6aef9-c6e7-454a-ba7a-ef0c75c83285
+---
 
-## How can I edit this code?
+Codex is a professional, full-stack coding contest platform designed for speed, scale, and reliability. Built with a powerful blend of Docker-based environment orchestration, Gemini API for AI-driven features, robust sandboxing for code execution, and a developer-friendly React+TypeScript frontend, Codex delivers an outstanding experience to both contest creators and participants.
 
-There are several ways of editing your application.
+---
 
-**Use Lovable**
+## 🚀 Core Features
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/5fc6aef9-c6e7-454a-ba7a-ef0c75c83285) and start prompting.
+- **Contest Management:** Create, host, and manage coding contests with live leaderboards, problem authorship, and customizable scoring.
+- **AI-Driven Tooling:** Integrated Gemini API for contextual help, problem analysis, and code review features[14][18].
+- **Secure Execution Sandbox:** All code submissions run in isolated, resource-restricted sandboxes to ensure security and fairness[7][11].
+- **Dockerized Infrastructure:** Every key service is containerized for rapid deployment, scaling, and consistent performance[4][5].
+- **Modern UI/UX:** Built with React and TypeScript for a seamless, responsive front-end experience[8][12].
+- **Real-Time Feedback:** Immediate compilation, test validation, and scoreboard updates.
+- **Multi-Language Support:** Easily configure additional languages and runtime environments.
 
-Changes made via Lovable will be committed automatically to this repo.
+---
 
-**Use your preferred IDE**
+## 🛠️ Tech Stack
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+| Layer        | Technology                   |
+|--------------|-----------------------------|
+| Frontend     | React, TypeScript           |
+| Backend      | Node.js, Express            |
+| AI Integration| Google Gemini API           |
+| Sandbox      | Docker, OS-level isolation  |
+| Orchestration| Docker Compose              |
+| UI Framework | shadcn-ui, Tailwind CSS     |
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+---
 
-Follow these steps:
+## ⚡ Getting Started
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### Prerequisites
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+- [Node.js](https://nodejs.org/)
+- [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
+- [Docker](https://www.docker.com/)
+- [Git](https://git-scm.com/)
+- Google Gemini API Key ([learn more](https://ai.google.dev/))
 
-# Step 3: Install the necessary dependencies.
-npm i
+---
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+### Installation
+
+### Clone the repository
+```bash
+git clone https://github.com/SIDDU2402/Codex.git
+cd Codex
+
+Set up environment
+cp .env.example .env
+
+Edit .env to add your Gemini API key and other settings
+Build and start services
+docker-compose up --build
 ```
+---
 
-**Edit a file directly in GitHub**
+## 🧩 How It Works
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+- **Containerized Judge:** Submissions spawn new Docker containers, ensuring all code runs in a secure, resource-limited sandbox[5][7][11].
+- **Gemini API AI Layer:** Used for code analysis, hints, and review features. Easily customize Gemini API calls for your workflow[14][18].
+- **Frontend:** Real-time updates, interactive dashboards, and problem-solving, all via a robust React + TypeScript SPA.
 
-**Use GitHub Codespaces**
+---
+## 🙏 Acknowledgments
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+- Google AI Gemini for advanced AI integration[14][18]
+- Docker for sandboxing and orchestration[4][5]
+- shadcn-ui & Tailwind CSS for frontend components
+- The open-source community
 
-## What technologies are used for this project?
+---
 
-This project is built with:
+## 📬 Contact
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+For support or feature requests, open an issue or start a discussion on GitHub.
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/5fc6aef9-c6e7-454a-ba7a-ef0c75c83285) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+---
