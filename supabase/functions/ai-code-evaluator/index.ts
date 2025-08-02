@@ -175,7 +175,7 @@ Response format: Either "NO_ERRORS" or a specific error message.`;
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        "model": "tngtech/deepseek-r1t2-chimera:free",
+        "model": "z-ai/glm-4.5-air:free",
         "messages": [
           {
             "role": "user",
@@ -264,7 +264,7 @@ Response format (JSON only, no other text):
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        "model": "tngtech/deepseek-r1t2-chimera:free",
+        "model": "z-ai/glm-4.5-air:free",
         "messages": [
           {
             "role": "user",
