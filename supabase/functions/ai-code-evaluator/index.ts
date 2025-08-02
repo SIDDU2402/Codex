@@ -19,6 +19,8 @@ interface EvaluationRequest {
   code: string;
   language: string;
   testCases: TestCase[];
+  problemTitle?: string;
+  problemDescription?: string;
 }
 
 interface TestResult {
@@ -262,36 +264,39 @@ async function evaluateTestCase(
   
   const startTime = Date.now();
   
-  const prompt = `You are a professional ${language} code interpreter and runtime environment. Execute this code mentally with absolute precision.
+  const prompt = `You are a professional ${language} compiler and runtime environment. Execute this code with complete accuracy.
 
-TASK: Simulate executing this ${language} code with the given input and determine the exact output.
+EXECUTION TASK:
+Compile and run this ${language} code with the provided input data. Act as a real ${language} interpreter.
 
-CODE TO EXECUTE:
+CODE:
 \`\`\`${language}
 ${code}
 \`\`\`
 
-INPUT DATA:
+INPUT (to be provided via stdin/input()):
 ${testCase.input_data}
 
-EXPECTED OUTPUT:
-${testCase.expected_output}
+EXECUTION INSTRUCTIONS:
+1. Parse the code line by line
+2. Apply the input data exactly as it would be read by the program
+3. Execute each statement in order
+4. Track all variable assignments and operations
+5. Capture exact output from print/console statements
+6. Check for runtime errors (type errors, division by zero, index bounds, etc.)
+7. Compare actual output with expected: "${testCase.expected_output}"
 
-EXECUTION REQUIREMENTS:
-1. Act as a ${language} interpreter/compiler
-2. Execute the code step-by-step with the given input
-3. Track variable values, function calls, and program flow
-4. Determine the exact console output/print statements
-5. Check for runtime errors (division by zero, index out of bounds, etc.)
-6. Match output format exactly (spaces, newlines, case-sensitivity)
+OUTPUT REQUIREMENTS:
+- Match exact formatting (spaces, newlines, capitalization)
+- Include only what the program would actually print
+- Be precise with numerical outputs (no extra decimals)
+- Handle string outputs exactly as printed
 
-CRITICAL: Respond ONLY with valid JSON. No markdown, no explanations, no extra text.
-
-JSON FORMAT:
+RESPOND WITH VALID JSON ONLY:
 {
-  "actual_output": "exact output produced by the code",
-  "passes": true,
-  "reasoning": "step-by-step execution trace",
+  "actual_output": "exactly what the code prints to console",
+  "passes": true/false based on actual_output === expected_output,
+  "execution_trace": "brief step-by-step execution summary",
   "has_runtime_error": false,
   "runtime_error": ""
 }`;
@@ -371,10 +376,25 @@ JSON FORMAT:
       throw new Error(`AI returned invalid JSON response: ${parseError.message}`);
     }
     
-    // Validate required fields
-    if (typeof aiResult.actual_output === 'undefined' || typeof aiResult.passes === 'undefined') {
+    // Validate required fields and normalize response
+    if (typeof aiResult.actual_output === 'undefined') {
+      aiResult.actual_output = '';
+    }
+    
+    if (typeof aiResult.passes === 'undefined') {
+      // Auto-determine pass status by comparing outputs
+      const actualOutput = String(aiResult.actual_output).trim();
+      const expectedOutput = String(testCase.expected_output).trim();
+      aiResult.passes = actualOutput === expectedOutput;
+    }
+    
+    // Ensure boolean type for passes
+    aiResult.passes = Boolean(aiResult.passes);
+    
+    // Validate critical fields
+    if (typeof aiResult.actual_output === 'undefined') {
       console.error('Invalid AI result structure:', aiResult);
-      throw new Error('AI response missing required fields (actual_output, passes)');
+      throw new Error('AI response missing actual_output field');
     }
 
     const executionTime = Date.now() - startTime;
