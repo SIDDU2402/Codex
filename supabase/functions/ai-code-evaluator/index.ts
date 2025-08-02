@@ -311,7 +311,7 @@ RESPOND WITH VALID JSON ONLY:
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        "model": "z-ai/glm-4.5-air:free",
+        "model": "deepseek/deepseek-r1-0528:free",
         "messages": [
           {
             "role": "user",
