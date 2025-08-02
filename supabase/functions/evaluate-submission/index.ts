@@ -14,10 +14,10 @@ serve(async (req) => {
 
   try {
     const { submissionId } = await req.json();
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+    const openrouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
     
-    if (!geminiApiKey) {
-      throw new Error('Gemini API key not configured');
+    if (!openrouterApiKey) {
+      throw new Error('OpenRouter API key not configured');
     }
     
     const supabaseClient = createClient(

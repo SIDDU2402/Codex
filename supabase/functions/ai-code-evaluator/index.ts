@@ -40,10 +40,10 @@ serve(async (req) => {
 
   try {
     const { code, language, testCases }: EvaluationRequest = await req.json();
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+    const openrouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
     
-    if (!geminiApiKey) {
-      throw new Error('Gemini API key not configured');
+    if (!openrouterApiKey) {
+      throw new Error('OpenRouter API key not configured');
     }
 
     console.log(`[${new Date().toISOString()}] AI Code Evaluation - ${language} with ${testCases.length} test cases`);
@@ -69,7 +69,7 @@ serve(async (req) => {
 
     // First, check for compilation errors
     console.log('Checking compilation...');
-    const compilationCheck = await checkCompilation(code, language, geminiApiKey);
+    const compilationCheck = await checkCompilation(code, language, openrouterApiKey);
     if (compilationCheck.hasError) {
       console.log('Compilation error found:', compilationCheck.error);
       results.compilation_error = compilationCheck.error;
@@ -104,7 +104,7 @@ serve(async (req) => {
       console.log(`Evaluating test case ${i + 1}/${testCases.length}`);
       
       try {
-        const result = await evaluateTestCase(code, language, testCase, geminiApiKey);
+        const result = await evaluateTestCase(code, language, testCase, openrouterApiKey);
         results.testResults.push(result);
         console.log(`Test case ${i + 1} result: ${result.passed ? 'PASSED' : 'FAILED'}`);
       } catch (error) {
@@ -166,38 +166,41 @@ Instructions:
 Response format: Either "NO_ERRORS" or a specific error message.`;
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        "Authorization": `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://lovable.dev",
+        "X-Title": "Lovable Coding Platform",
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: prompt
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 500,
-        }
+        "model": "tngtech/deepseek-r1t2-chimera:free",
+        "messages": [
+          {
+            "role": "user",
+            "content": prompt
+          }
+        ],
+        "temperature": 0.1,
+        "max_tokens": 500
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Gemini API error response:', errorText);
-      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+      console.error('OpenRouter API error response:', errorText);
+      throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
     
-    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
-      console.error('Invalid Gemini API response structure:', JSON.stringify(data));
-      throw new Error('Invalid response structure from Gemini API');
+    if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
+      console.error('Invalid OpenRouter API response structure:', JSON.stringify(data));
+      throw new Error('Invalid response structure from OpenRouter API');
     }
     
-    const result = data.candidates[0].content.parts[0].text.trim();
+    const result = data.choices[0].message.content.trim();
     
     return {
       hasError: result !== 'NO_ERRORS',
@@ -252,39 +255,42 @@ Response format (JSON only, no other text):
 }`;
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        "Authorization": `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://lovable.dev",
+        "X-Title": "Lovable Coding Platform",
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: prompt
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 1000,
-        }
+        "model": "tngtech/deepseek-r1t2-chimera:free",
+        "messages": [
+          {
+            "role": "user",
+            "content": prompt
+          }
+        ],
+        "temperature": 0.1,
+        "max_tokens": 1000
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Gemini API error response:', errorText);
-      throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
+      console.error('OpenRouter API error response:', errorText);
+      throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
     
-    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0]) {
-      console.error('Invalid Gemini API response structure:', JSON.stringify(data));
-      throw new Error('Invalid response structure from Gemini API');
+    if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
+      console.error('Invalid OpenRouter API response structure:', JSON.stringify(data));
+      throw new Error('Invalid response structure from OpenRouter API');
     }
     
-    const resultText = data.candidates[0].content.parts[0].text.trim();
-    console.log('Raw Gemini response:', resultText);
+    const resultText = data.choices[0].message.content.trim();
+    console.log('Raw OpenRouter response:', resultText);
     
     // Try to extract JSON from the response
     let jsonMatch = resultText.match(/\{[\s\S]*\}/);
