@@ -104,7 +104,7 @@ serve(async (req) => {
       console.log(`Evaluating test case ${i + 1}/${testCases.length}`);
       
       try {
-        const result = await evaluateTestCase(code, language, testCase, openrouterApiKey);
+        const result = await evaluateTestCaseWithRetry(code, language, testCase, openrouterApiKey, 3);
         results.testResults.push(result);
         console.log(`Test case ${i + 1} result: ${result.passed ? 'PASSED' : 'FAILED'}`);
       } catch (error) {
@@ -150,20 +150,26 @@ serve(async (req) => {
 });
 
 async function checkCompilation(code: string, language: string, apiKey: string) {
-  const prompt = `You are an expert code compiler and syntax checker. Analyze the following ${language} code for compilation errors, syntax errors, and basic structural issues.
+  const prompt = `You are a professional code compiler. Your job is to analyze code for compilation errors with absolute precision.
 
-Code to analyze:
+TASK: Check this ${language} code for compilation errors, syntax errors, missing imports, and structural issues.
+
+CODE TO ANALYZE:
 \`\`\`${language}
 ${code}
 \`\`\`
 
-Instructions:
-1. Check for syntax errors, missing imports, undefined variables, and other compilation issues
-2. Consider the language-specific rules and conventions
-3. If there are no compilation errors, respond with exactly "NO_ERRORS"
-4. If there are compilation errors, provide a clear, concise error message
+COMPILER REQUIREMENTS:
+1. Act exactly like a ${language} compiler would
+2. Check syntax, imports, variable declarations, function definitions
+3. Verify language-specific rules and conventions
+4. Be strict and precise in your analysis
 
-Response format: Either "NO_ERRORS" or a specific error message.`;
+RESPONSE FORMAT (CRITICAL):
+- If NO compilation errors exist: respond with exactly "NO_ERRORS"
+- If compilation errors exist: provide a clear, specific error message
+- Do NOT use JSON format
+- Do NOT add explanations or extra text`;
 
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -216,6 +222,37 @@ Response format: Either "NO_ERRORS" or a specific error message.`;
   }
 }
 
+async function evaluateTestCaseWithRetry(
+  code: string, 
+  language: string, 
+  testCase: TestCase, 
+  apiKey: string,
+  maxRetries: number = 3
+): Promise<TestResult> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Test case evaluation attempt ${attempt}/${maxRetries}`);
+      const result = await evaluateTestCase(code, language, testCase, apiKey);
+      return result;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error('Unknown error');
+      console.error(`Attempt ${attempt} failed:`, lastError.message);
+      
+      // Don't retry on certain types of errors
+      if (lastError.message.includes('API error') || attempt === maxRetries) {
+        throw lastError;
+      }
+      
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+    }
+  }
+  
+  throw lastError || new Error('All retry attempts failed');
+}
+
 async function evaluateTestCase(
   code: string, 
   language: string, 
@@ -225,33 +262,38 @@ async function evaluateTestCase(
   
   const startTime = Date.now();
   
-  const prompt = `You are an expert code evaluator. Analyze the following ${language} code and determine what output it would produce for the given input.
+  const prompt = `You are a professional ${language} code interpreter and runtime environment. Execute this code mentally with absolute precision.
 
-Code to evaluate:
+TASK: Simulate executing this ${language} code with the given input and determine the exact output.
+
+CODE TO EXECUTE:
 \`\`\`${language}
 ${code}
 \`\`\`
 
-Input:
+INPUT DATA:
 ${testCase.input_data}
 
-Expected Output:
+EXPECTED OUTPUT:
 ${testCase.expected_output}
 
-Instructions:
-1. Trace through the code logic step by step
-2. Determine what the code would output for the given input
-3. Compare with the expected output exactly (including whitespace and formatting)
-4. Be very precise about whitespace, newlines, and formatting
-5. Consider edge cases and potential runtime errors
+EXECUTION REQUIREMENTS:
+1. Act as a ${language} interpreter/compiler
+2. Execute the code step-by-step with the given input
+3. Track variable values, function calls, and program flow
+4. Determine the exact console output/print statements
+5. Check for runtime errors (division by zero, index out of bounds, etc.)
+6. Match output format exactly (spaces, newlines, case-sensitivity)
 
-Response format (JSON only, no other text):
+CRITICAL: Respond ONLY with valid JSON. No markdown, no explanations, no extra text.
+
+JSON FORMAT:
 {
-  "actual_output": "the exact output the code would produce",
-  "passes": true/false,
-  "reasoning": "brief explanation of your evaluation",
-  "has_runtime_error": true/false,
-  "runtime_error": "error message if any"
+  "actual_output": "exact output produced by the code",
+  "passes": true,
+  "reasoning": "step-by-step execution trace",
+  "has_runtime_error": false,
+  "runtime_error": ""
 }`;
 
   try {
@@ -292,19 +334,47 @@ Response format (JSON only, no other text):
     const resultText = data.choices[0].message.content.trim();
     console.log('Raw OpenRouter response:', resultText);
     
-    // Try to extract JSON from the response
-    let jsonMatch = resultText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      // If no JSON found, try to parse the entire response
-      jsonMatch = [resultText];
+    // Handle empty responses
+    if (!resultText || resultText.length === 0) {
+      console.error('Empty response from OpenRouter API');
+      throw new Error('AI returned empty response');
+    }
+    
+    // Extract JSON from response (handle markdown code blocks)
+    let jsonText = resultText;
+    
+    // Remove markdown code blocks if present
+    if (resultText.includes('```json')) {
+      const jsonMatch = resultText.match(/```json\s*(\{[\s\S]*?\})\s*```/);
+      if (jsonMatch) {
+        jsonText = jsonMatch[1];
+      }
+    } else if (resultText.includes('```')) {
+      const jsonMatch = resultText.match(/```\s*(\{[\s\S]*?\})\s*```/);
+      if (jsonMatch) {
+        jsonText = jsonMatch[1];
+      }
+    } else {
+      // Try to find JSON object in the response
+      const jsonMatch = resultText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonText = jsonMatch[0];
+      }
     }
     
     let aiResult;
     try {
-      aiResult = JSON.parse(jsonMatch[0]);
+      aiResult = JSON.parse(jsonText);
     } catch (parseError) {
       console.error('Failed to parse AI response as JSON:', resultText);
-      throw new Error('AI returned invalid JSON response');
+      console.error('Extracted JSON text:', jsonText);
+      throw new Error(`AI returned invalid JSON response: ${parseError.message}`);
+    }
+    
+    // Validate required fields
+    if (typeof aiResult.actual_output === 'undefined' || typeof aiResult.passes === 'undefined') {
+      console.error('Invalid AI result structure:', aiResult);
+      throw new Error('AI response missing required fields (actual_output, passes)');
     }
 
     const executionTime = Date.now() - startTime;
