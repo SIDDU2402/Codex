@@ -183,7 +183,7 @@ RESPONSE FORMAT (CRITICAL):
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        "model": "z-ai/glm-4.5-air:free",
+        "model": "openai/gpt-oss-20b:free",
         "messages": [
           {
             "role": "user",
