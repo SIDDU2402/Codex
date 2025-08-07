@@ -100,27 +100,48 @@ serve(async (req) => {
 
     console.log('Compilation successful, evaluating test cases...');
 
-    // Evaluate each test case using Gemini AI
-    for (let i = 0; i < testCases.length; i++) {
-      const testCase = testCases[i];
-      console.log(`Evaluating test case ${i + 1}/${testCases.length}`);
-      
-      try {
-        const result = await evaluateTestCaseWithRetry(code, language, testCase, openrouterApiKey, 3);
-        results.testResults.push(result);
-        console.log(`Test case ${i + 1} result: ${result.passed ? 'PASSED' : 'FAILED'}`);
-      } catch (error) {
-        console.error(`Test case ${i + 1} evaluation error:`, error);
-        results.testResults.push({
-          passed: false,
-          input: testCase.input_data,
-          expected: testCase.expected_output,
-          actual: '',
-          error: error instanceof Error ? error.message : 'AI evaluation error',
-          execution_time: 0
+    // Evaluate test cases with concurrency for speed
+    const CONCURRENCY = Math.min(4, Math.max(1, testCases.length));
+    const batches: TestCase[][] = [];
+    for (let i = 0; i < testCases.length; i += CONCURRENCY) {
+      batches.push(testCases.slice(i, i + CONCURRENCY));
+    }
+
+    let globalIndex = 0;
+    for (let b = 0; b < batches.length; b++) {
+      const batch = batches[b];
+      console.log(`Evaluating batch ${b + 1}/${batches.length} (size ${batch.length})`);
+
+      const batchResults = await Promise.all(batch.map(async (testCase, idx) => {
+        const currentIndex = globalIndex + idx;
+        try {
+          const result = await evaluateTestCaseWithRetry(code, language, testCase, openrouterApiKey, 2);
+          console.log(`Test case ${currentIndex + 1} result: ${result.passed ? 'PASSED' : 'FAILED'}`);
+          return { index: currentIndex, result };
+        } catch (error) {
+          console.error(`Test case ${currentIndex + 1} evaluation error:`, error);
+          return {
+            index: currentIndex,
+            result: {
+              passed: false,
+              input: testCase.input_data,
+              expected: testCase.expected_output,
+              actual: '',
+              error: error instanceof Error ? error.message : 'AI evaluation error',
+              execution_time: 0
+            } as TestResult
+          };
+        }
+      }));
+
+      batchResults
+        .sort((a, b) => a.index - b.index)
+        .forEach(({ result }) => {
+          results.testResults.push(result);
+          if (!result.passed) results.success = false;
         });
-        results.success = false;
-      }
+
+      globalIndex += batch.length;
     }
 
     const passedCount = results.testResults.filter(r => r.passed).length;
@@ -183,7 +204,7 @@ RESPONSE FORMAT (CRITICAL):
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        "model": "openai/gpt-oss-20b:free",
+        "model": "openai/gpt-4o-mini",
         "messages": [
           {
             "role": "user",
@@ -191,7 +212,7 @@ RESPONSE FORMAT (CRITICAL):
           }
         ],
         "temperature": 0.1,
-        "max_tokens": 500
+        "max_tokens": 200
       }),
     });
 
@@ -229,7 +250,7 @@ async function evaluateTestCaseWithRetry(
   language: string, 
   testCase: TestCase, 
   apiKey: string,
-  maxRetries: number = 3
+  maxRetries: number = 2
 ): Promise<TestResult> {
   let lastError: Error | null = null;
   
@@ -311,7 +332,7 @@ RESPOND WITH VALID JSON ONLY:
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        "model": "deepseek/deepseek-r1-0528:free",
+        "model": "openai/gpt-4o-mini",
         "messages": [
           {
             "role": "user",
@@ -319,7 +340,7 @@ RESPOND WITH VALID JSON ONLY:
           }
         ],
         "temperature": 0.1,
-        "max_tokens": 1000
+        "max_tokens": 400
       }),
     });
 
